@@ -3,5 +3,10 @@ add_executable(emulator
     src/emulator.cpp
 )
 
-target_include_directories(emulator PUBLIC include)
-target_link_libraries(emulator PRIVATE common)
+target_include_directories(emulator 
+    PUBLIC include
+)
+
+target_link_libraries(emulator 
+    PRIVATE common
+)
