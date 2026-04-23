@@ -8,4 +8,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_subdirectory(common)
 add_subdirectory(assembler)
 add_subdirectory(emulator)
+
 add_subdirectory(tests)
+# if(BUILD_TESTING)
+#     add_subdirectory(tests)
+# endif()

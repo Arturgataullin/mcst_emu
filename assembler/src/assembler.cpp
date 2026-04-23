@@ -1,4 +1,4 @@
-#include "../include/assembler.h"
+#include "assembler.h"
 
 namespace assembler {
 	int Assembler::run() {
