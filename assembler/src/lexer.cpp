@@ -161,18 +161,18 @@ namespace assembler {
 
         if (ch == '\r' && next_ch == '\n') {
             pos_ += 2;
-            ++line_;
+            line_++;
             column_ = 1;
             return '\n';
         }
 
-        ++pos_;
+        pos_++;
         if (ch == '\n') {
-            ++line_;
+            line_++;
             column_ = 1;
         } 
         else {
-            ++column_;
+            column_++;
         }
 
         return ch;

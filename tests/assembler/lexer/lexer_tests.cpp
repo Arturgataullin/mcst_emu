@@ -29,7 +29,7 @@ TEST_CASE("lexer tokenizes a single newline") {
     CHECK(tokens[1].type == TokenType::EndOfFile);
 }
 
-TEST_CASE("lexer dont tokenize comments") {
+TEST_CASE("lexer doesnt tokenize comments") {
     Lexer lexer("ADD #R1 R2 R3\nLI");
     const auto tokens = lexer.tokenize();
 

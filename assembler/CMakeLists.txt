@@ -1,6 +1,7 @@
 add_library(assembler_lib
     src/assembler.cpp
     src/lexer.cpp
+    src/parser.cpp
     src/token.cpp
 )
 
