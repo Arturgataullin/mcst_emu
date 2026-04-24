@@ -6,15 +6,12 @@
 #include <unordered_set>
 
 #include "lexer.h"
+#include "isa.h"
 
 namespace assembler {
 
 
     namespace {
-
-    const std::unordered_set<std::string> sOperations = {
-        "LI", "ADD"
-    };
 
     bool isHexDigit(char ch) noexcept {
         return std::isxdigit(static_cast<unsigned char>(ch)) != 0;
@@ -63,11 +60,11 @@ namespace assembler {
                 tokens.push_back(lexNumber());
             } 
             else if (isWordStart(ch)) {
-                tokens.push_back(lexWord());
+                tokens.push_back(lexOprationOrRegister());
             } 
             else if (isNewLine(ch, next_ch)) {
                 advance();
-                tokens.push_back(makeSimpleToken(TokenType::NewLine, "", SourceLocation{line_, column_}));
+                tokens.push_back(makeSimpleToken(TokenType::NewLine, "", location));
             }
             else {
                 fail(location, std::string("unexpected character '") + ch + "'");
@@ -78,7 +75,7 @@ namespace assembler {
         return tokens;
     }
 
-    Token Lexer::lexWord() {
+    Token Lexer::lexOprationOrRegister() {
         const SourceLocation location{line_, column_};
         const std::size_t start = pos_;
 
@@ -88,7 +85,6 @@ namespace assembler {
         std::string lexeme = source_.substr(start, pos_ - start);
         std::string upperLexeme = toUpperCopy(lexeme);
 
-        TokenType type;
         // the register number will be saved in the numberValue field in the register token
         if (auto regIndex = parseRegisterIndex(upperLexeme)) {
             return Token{
@@ -107,7 +103,7 @@ namespace assembler {
             };
         }
         
-        fail(location, "unknown word");
+        fail(location, "unknown word '" + lexeme + "'");
     }
     
     Token Lexer::lexNumber() {
@@ -221,7 +217,7 @@ namespace assembler {
     }
 
     bool Lexer::isOperationLike(const std::string& upperLexeme) {
-        return sOperations.find(upperLexeme) != sOperations.end();
+        return common::operationFromSring(upperLexeme).has_value();
     }
 
     std::optional<std::int64_t> Lexer::parseRegisterIndex(std::string_view upperLexeme) {

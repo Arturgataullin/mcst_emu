@@ -72,45 +72,52 @@ namespace {
         expect(TokenType::Operation, "expected operation at start of instruction");
 
         const Token opToken = advance();
-        const Operation op = parseOperation(opToken);
+
+        const auto op = common::operationFromSring(opToken.lexeme);
+        if (!op.has_value()) {
+            fail(opToken.location, "unsupported operation '" + opToken.lexeme + "'");
+        }
 
         Instruction instruction;
-        instruction.operation = op;
+        instruction.operation = *op;
         instruction.location = opToken.location;
 
-        switch (op) {
-            case Operation::LI:
+        switch (*op) {
+            case common::Operation::LI:
                 instruction.operands.push_back(parseRegisterOperand());
                 instruction.operands.push_back(parseImmediateOperand());
                 break;
 
-            case Operation::ADD:
+            case common::Operation::ADD:
                 instruction.operands.push_back(parseRegisterOperand());
                 instruction.operands.push_back(parseRegisterOperand());
                 instruction.operands.push_back(parseRegisterOperand());
                 break;
         }
 
-        expectEndOfLineOrFile();
+        if (!check(TokenType::NewLine) && !check(TokenType::EndOfFile)) {
+            fail(current().location, "expected end of line after instruction");
+        }
+
         return instruction;
-    }
-
-    Operation Parser::parseOperation(const Token& token) const {
-        if (token.lexeme == "LI") {
-            return Operation::LI;
-        }
-        if (token.lexeme == "ADD") {
-            return Operation::ADD;
-        }
-
-        fail(token.location, "unsupported operation '" + token.lexeme + "'");
     }
 
     RegisterOperand Parser::parseRegisterOperand() {
         expect(TokenType::Register, "expected register operand");
 
         const Token token = advance();
-        return RegisterOperand{token.lexeme};
+
+        if (!token.numberValue.has_value()) {
+            fail(token.location, "register token does not contain register index");
+        }
+
+        const auto reg = *token.numberValue;
+
+        if (reg >= common::registerCount) {
+            fail(token.location, "register number must be from 0 to " + std::to_string(common::registerCount - 1));
+        }
+
+        return RegisterOperand{static_cast<std::uint8_t>(reg)};
     }
 
     ImmediateOperand Parser::parseImmediateOperand() {
@@ -121,8 +128,14 @@ namespace {
             fail(token.location, "number token does not contain parsed value");
         }
 
+        const auto val = *token.numberValue;
+
+        if (val > common::immediateMax) {
+            fail(token.location, "immediate value must be in range [0x0, " + std::to_string(common::immediateMax) + "]");
+        }
+
         return ImmediateOperand{
-            .value = static_cast<std::uint64_t>(*token.numberValue)
+            .value = static_cast<std::uint16_t>(val)
         };
     }
 
@@ -130,14 +143,6 @@ namespace {
         if (!check(type)) {
             fail(current().location, message + ", got " + std::string(toString(current().type)));
         }
-    }
-
-    void Parser::expectEndOfLineOrFile() {
-        if (check(TokenType::NewLine) || check(TokenType::EndOfFile)) {
-            return;
-        }
-
-        fail(current().location, "expected end of line after instruction");
     }
 
     void Parser::fail(const SourceLocation& location, const std::string& message) const {

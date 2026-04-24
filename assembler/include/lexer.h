@@ -30,7 +30,7 @@ namespace assembler {
         void skipComment() noexcept;
 
         Token makeSimpleToken(TokenType type, std::string lexeme, SourceLocation location) const;
-        Token lexWord();
+        Token lexOprationOrRegister();
         Token lexNumber();
 
         std::uint64_t parseInteger(const std::string& lexeme, const SourceLocation& location);

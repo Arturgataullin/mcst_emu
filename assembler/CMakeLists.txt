@@ -24,3 +24,4 @@ target_link_libraries(assembler
 target_include_directories(assembler 
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+

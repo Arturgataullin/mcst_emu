@@ -12,4 +12,9 @@ add_executable(assembler_lexer_tests
     assembler/lexer/lexer_tests.cpp
 )
 
+add_executable(assembler_parser_tests
+    assembler/parser/parser_tests.cpp
+)
+
 target_link_libraries(assembler_lexer_tests PRIVATE assembler_lib Catch2::Catch2WithMain)
+target_link_libraries(assembler_parser_tests PRIVATE assembler_lib Catch2::Catch2WithMain)

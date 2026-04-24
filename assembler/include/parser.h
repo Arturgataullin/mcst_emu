@@ -8,26 +8,22 @@
 #include <vector>
 
 #include "lexer.h"
+#include "isa.h"
 
 namespace assembler {
 
-    enum class Operation {
-        LI,
-        ADD
-    };
-
     struct RegisterOperand {
-        std::string name;
+        std::uint8_t number = 0;
     };
 
     struct ImmediateOperand {
-        std::uint64_t value = 0;
+        std::uint16_t value = 0;
     };
 
     using Operand = std::variant<RegisterOperand, ImmediateOperand>;
 
     struct Instruction {
-        Operation operation{};
+        common::Operation operation{};
         std::vector<Operand> operands;
         SourceLocation location{};
     };
@@ -53,12 +49,11 @@ namespace assembler {
         void skipNewLines() noexcept;
 
         Instruction parseInstruction();
-        Operation parseOperation(const Token& token) const;
+        common::Operation parseOperation(const Token& token) const;
         RegisterOperand parseRegisterOperand();
         ImmediateOperand parseImmediateOperand();
 
         void expect(TokenType type, const std::string& message);
-        void expectEndOfLineOrFile();
 
         void fail(const SourceLocation& location, const std::string& message) const;
 
