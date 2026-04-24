@@ -39,7 +39,7 @@ namespace assembler {
 
         static std::string toUpperCopy(std::string_view text);
         static bool isOperationLike(const std::string& upperLexeme);
-        static bool isRegisterLike(const std::string& upperLexeme);
+        static std::optional<std::int64_t> parseRegisterIndex(std::string_view lexeme);
         static bool isCommentStart(const char ch);
         static bool isTokenSeparator(char ch, char next_ch);
     };

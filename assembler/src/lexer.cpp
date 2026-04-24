@@ -89,22 +89,25 @@ namespace assembler {
         std::string upperLexeme = toUpperCopy(lexeme);
 
         TokenType type;
-        if (isRegisterLike(upperLexeme)) {
-            type = TokenType::Register;
-        } 
+        // the register number will be saved in the numberValue field in the register token
+        if (auto regIndex = parseRegisterIndex(upperLexeme)) {
+            return Token{
+                .type = TokenType::Register,
+                .lexeme = upperLexeme,
+                .location = location,
+                .numberValue = *regIndex
+            };
+        }
         else if (isOperationLike(upperLexeme)) {
-            type = TokenType::Operation;
+            return Token{
+                .type = TokenType::Operation,
+                .lexeme = upperLexeme,
+                .location = location,
+                .numberValue = std::nullopt
+            };
         }
-        else {
-            fail(location, "unknown word");
-        }
-
-        return Token{
-            .type = type,
-            .lexeme = upperLexeme,
-            .location = location,
-            .numberValue = std::nullopt
-        };
+        
+        fail(location, "unknown word");
     }
     
     Token Lexer::lexNumber() {
@@ -221,13 +224,31 @@ namespace assembler {
         return sOperations.find(upperLexeme) != sOperations.end();
     }
 
-    bool Lexer::isRegisterLike(const std::string& upperLexeme) {
-        if (upperLexeme.size() >= 2 && upperLexeme[0] == 'R') {
-            return std::all_of(upperLexeme.begin() + 1, upperLexeme.end(),
-                            [](char ch) { return std::isdigit(static_cast<unsigned char>(ch)) != 0; });
+    std::optional<std::int64_t> Lexer::parseRegisterIndex(std::string_view upperLexeme) {
+        if (upperLexeme.size() < 2 || upperLexeme[0] != 'R') {
+            return std::nullopt;
         }
 
-        return false;
+        if (!std::all_of(upperLexeme.begin() + 1, upperLexeme.end(),
+                        [](char ch) {
+                            return std::isdigit(static_cast<unsigned char>(ch)) != 0;
+                        })) {
+            return std::nullopt;
+        }
+
+        try {
+            std::size_t consumed = 0;
+            const auto value = std::stoul(std::string(upperLexeme.substr(1)), &consumed, 10);
+
+            if (consumed != upperLexeme.size() - 1) {
+                return std::nullopt;
+            }
+
+            return value;
+        } 
+        catch (...) {
+            return std::nullopt;
+        }
     }
 
     std::string Lexer::toUpperCopy(std::string_view text) {
