@@ -2,6 +2,7 @@ add_library(assembler_lib
     src/assembler.cpp
     src/lexer.cpp
     src/parser.cpp
+    src/encoder.cpp
     src/token.cpp
 )
 
@@ -21,7 +22,4 @@ target_link_libraries(assembler
     PRIVATE assembler_lib
 )
 
-target_include_directories(assembler 
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
 

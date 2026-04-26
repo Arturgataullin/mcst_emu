@@ -18,4 +18,12 @@ namespace common {
         }
         return "UNKNOWN";
     }
+
+    Opcode opcodeForOperation(Operation op) {
+        switch (op) {
+            case Operation::LI: return Opcode::LI;
+            case Operation::ADD: return Opcode::ADD;
+        }
+        throw std::logic_error("unknown operation");
+    }
 }
