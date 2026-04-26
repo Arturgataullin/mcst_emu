@@ -5,11 +5,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+include(CTest)
+
 add_subdirectory(common)
 add_subdirectory(assembler)
 add_subdirectory(emulator)
 
-add_subdirectory(tests)
-# if(BUILD_TESTING)
-#     add_subdirectory(tests)
-# endif()
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()

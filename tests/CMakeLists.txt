@@ -43,3 +43,12 @@ target_link_libraries(assembler_tests PRIVATE assembler_lib Catch2::Catch2WithMa
 target_link_libraries(emulator_memory_tests PRIVATE emulator_lib Catch2::Catch2WithMain)
 
 target_link_libraries(emulator_tests PRIVATE emulator_lib Catch2::Catch2WithMain)
+
+include(Catch)
+
+catch_discover_tests(assembler_lexer_tests)
+catch_discover_tests(assembler_parser_tests)
+catch_discover_tests(assembler_encoder_tests)
+catch_discover_tests(assembler_tests)
+catch_discover_tests(emulator_memory_tests)
+catch_discover_tests(emulator_tests)
