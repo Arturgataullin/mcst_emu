@@ -1,16 +1,21 @@
+#include <exception>
 #include <iostream>
 
-#include "lexer.h"
+#include "assembler.h"
 
-using namespace assembler;
-
-int main() {
-    std::cout << "Sdsd\n";
-    Lexer lx("\n\n\n");
-    auto res = lx.tokenize();
-    std::cout << res.size() << "\n";
-    for (const auto& elem : res) {
-        std::cout << toString(elem.type) << "\n";
+int main(int argc, char* argv[]) {
+    if (argc != 3) {
+        std::cerr << "usage: assembler <input.s> <output.o>\n";
+        return 1;
     }
-    return 0;
+
+    try {
+        assembler::Assembler assembler;
+        assembler.assembleFile(argv[1], argv[2]);
+        return 0;
+    } 
+    catch (const std::exception& e) {
+        std::cerr << e.what() << '\n';
+        return 1;
+    }
 }

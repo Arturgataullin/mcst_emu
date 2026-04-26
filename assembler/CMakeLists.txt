@@ -3,6 +3,7 @@ add_library(assembler_lib
     src/lexer.cpp
     src/parser.cpp
     src/encoder.cpp
+    src/binary_writer.cpp
     src/token.cpp
 )
 

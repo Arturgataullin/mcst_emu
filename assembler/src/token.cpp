@@ -1,7 +1,7 @@
 #include "token.h"
 
 namespace assembler {
-    std::string_view toString(TokenType type) {
+std::string_view toString(TokenType type) {
     switch (type) {
         case TokenType::Operation: return "Operation";
         case TokenType::Register: return "Register";
