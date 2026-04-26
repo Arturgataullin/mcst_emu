@@ -79,7 +79,8 @@ R0=0x1, R1=0x8001, R2=0x0, ...
 
 ```bash
 mkdir build
-cmake -S. -B build
+cmake -S. -B build -DBUILD_TESTING=OFF
+cmake --build build/
 ```
 
 ### Сборка с тестами
@@ -87,6 +88,7 @@ cmake -S. -B build
 ```bash
 mkdir -p build
 cmake -S. -B build -DBUILD_TESTING=ON
+cmake --build build/
 ```
 
 ---
