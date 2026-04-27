@@ -79,7 +79,7 @@ R0=0x1, R1=0x8001, R2=0x0, ...
 
 ```bash
 mkdir build
-cmake -S. -B build -DBUILD_TESTING=OFF
+cmake -S. -B build
 cmake --build build/
 ```
 

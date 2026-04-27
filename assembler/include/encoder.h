@@ -17,7 +17,7 @@ private:
     std::uint8_t requireRegister(const Operand& operand, const SourceLocation& location, const char* operandName) const;
     std::uint16_t requireImmediate(const Operand& operand, const SourceLocation& location, const char* operandName) const;
 
-    void fail(const SourceLocation& location, const std::string& message) const;
+    [[noreturn]] void fail(const SourceLocation& location, const std::string& message) const;
 };
 
 }

@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <string_view>
 
-// all operands store in register momoryt
+// all operands store in register memory
 // op memory is only for commands
 
 namespace common {

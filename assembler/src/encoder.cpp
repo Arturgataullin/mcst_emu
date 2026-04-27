@@ -98,7 +98,7 @@ std::uint16_t Encoder::requireImmediate(const Operand& operand, const SourceLoca
     return std::get<ImmediateOperand>(operand).value;
 }
 
-void Encoder::fail(const SourceLocation& location, const std::string& message) const {
+[[noreturn]] void Encoder::fail(const SourceLocation& location, const std::string& message) const {
     throw std::runtime_error(formatErrorMessage(location, message));
 }
 

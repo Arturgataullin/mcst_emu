@@ -204,7 +204,7 @@ Token Lexer::makeSimpleToken(TokenType type, std::string lexeme, SourceLocation 
     };
 }
 
-void Lexer::fail(const SourceLocation& location, const std::string& message) const {
+[[noreturn]] void Lexer::fail(const SourceLocation& location, const std::string& message) const {
     throw std::runtime_error(formatErrorMessage(location, message));
 }
 

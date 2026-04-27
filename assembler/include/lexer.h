@@ -35,7 +35,7 @@ private:
 
     std::uint64_t parseInteger(const std::string& lexeme, const SourceLocation& location);
 
-    void fail(const SourceLocation& location, const std::string& message) const;
+    [[noreturn]] void fail(const SourceLocation& location, const std::string& message) const;
 
     static std::string toUpperCopy(std::string_view text);
     static bool isOperationLike(const std::string& upperLexeme);

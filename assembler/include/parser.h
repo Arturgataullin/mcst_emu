@@ -55,7 +55,7 @@ private:
 
     void expect(TokenType type, const std::string& message);
 
-    void fail(const SourceLocation& location, const std::string& message) const;
+    [[noreturn]] void fail(const SourceLocation& location, const std::string& message) const;
 
 private:
     std::vector<Token> tokens_;

@@ -1,4 +1,5 @@
 build/
 *.o
+exaples/*.o
 .vscode/
 Testing/

@@ -145,7 +145,7 @@ void Parser::expect(TokenType type, const std::string& message) {
     }
 }
 
-void Parser::fail(const SourceLocation& location, const std::string& message) const {
+[[noreturn]] void Parser::fail(const SourceLocation& location, const std::string& message) const {
     throw std::runtime_error(formatErrorMessage(location, message));
 }
 
