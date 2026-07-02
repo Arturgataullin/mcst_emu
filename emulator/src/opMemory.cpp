@@ -44,7 +44,7 @@ void Memory::checkAddress(std::uint32_t address) const {
 }
 
 void Memory::checkRange(std::uint32_t address, std::size_t size) const {
-    if (address + size > data_.size()) {
+    if (address + size > data_.size()) { // переполнение мб
         throw std::runtime_error("memory range access out of range");
     }
 }

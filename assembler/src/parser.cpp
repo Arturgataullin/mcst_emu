@@ -17,13 +17,155 @@ namespace {
 Parser::Parser(std::vector<Token> tokens)
     : tokens_(std::move(tokens)) {}
 
+namespace {
+
+RegisterOperand makeRegisterOperand(std::uint8_t reg) {
+    return RegisterOperand{
+        .number = reg
+    };
+}
+
+ImmediateOperand makeImmediateOperand(std::uint16_t value) {
+    return ImmediateOperand{
+        .value = value
+    };
+}
+
+Instruction makeLoadInstruction(
+    common::Operation operation,
+    std::uint8_t reg,
+    std::uint16_t value,
+    SourceLocation loc
+) {
+    if (operation != common::Operation::LI &&
+        operation != common::Operation::LUI) {
+        throw std::logic_error("makeLoadInstruction expects LI or LUI");
+    }
+
+    Instruction instruction;
+    instruction.operation = operation;
+    instruction.location = loc;
+
+    instruction.operands.reserve(2);
+    instruction.operands.push_back(makeRegisterOperand(reg));
+    instruction.operands.push_back(makeImmediateOperand(value));
+
+    return instruction;
+}
+
+Instruction makeRegisterInstruction(
+    common::Operation operation,
+    std::uint8_t destination,
+    std::uint8_t leftSource,
+    std::uint8_t rightSource,
+    SourceLocation location
+) {
+    Instruction instruction;
+    instruction.operation = operation;
+    instruction.location = location;
+
+    instruction.operands.reserve(3);
+    instruction.operands.push_back(makeRegisterOperand(destination));
+    instruction.operands.push_back(makeRegisterOperand(leftSource));
+    instruction.operands.push_back(makeRegisterOperand(rightSource));
+
+    return instruction;
+}
+
+std::uint8_t getRegisterNumber(const Instruction& instruction, std::size_t index) {
+    return std::get<RegisterOperand>(instruction.operands.at(index)).number;
+}
+
+std::uint32_t getImmediateValue(const Instruction& instruction, std::size_t index) {
+    return std::get<ImmediateOperand>(instruction.operands.at(index)).value;
+}
+
+void appendMov(const Instruction& instruction, std::vector<Instruction>& out) {
+    const auto destination = getRegisterNumber(instruction, 0);
+    const auto source = getRegisterNumber(instruction, 1);
+
+    out.push_back(makeRegisterInstruction(
+        common::Operation::OR,
+        destination,
+        source,
+        source,
+        instruction.location
+    ));
+}
+
+void appendNeg(const Instruction& instruction, std::vector<Instruction>& out) {
+    const auto destination = getRegisterNumber(instruction, 0);
+    const auto source = getRegisterNumber(instruction, 1);
+    const auto temp = common::assemblerTempRegister;
+
+    out.push_back(makeLoadInstruction(common::Operation::LI, temp, 0, instruction.location));
+    out.push_back(makeRegisterInstruction(
+        common::Operation::SUB,
+        destination,
+        temp,
+        source,
+        instruction.location
+    ));
+}
+
+void appendNot(const Instruction& instruction, std::vector<Instruction>& out) {
+    const auto reg = getRegisterNumber(instruction, 0);
+    const auto temp = common::assemblerTempRegister;
+
+    out.push_back(makeLoadInstruction(common::Operation::LI, temp, 0xFFFF, instruction.location));
+    out.push_back(makeLoadInstruction(common::Operation::LUI, temp, 0xFFFF, instruction.location));
+    out.push_back(makeRegisterInstruction(
+        common::Operation::XOR,
+        reg,
+        reg,
+        temp,
+        instruction.location
+    ));
+}
+
+void appendLfi(const Instruction& instruction, std::vector<Instruction>& out) {
+    const auto destination = getRegisterNumber(instruction, 0);
+    const auto value = getImmediateValue(instruction, 1);
+    const auto lower = static_cast<std::uint16_t>(value & 0xFFFFu);
+    const auto upper = static_cast<std::uint16_t>(value >> 16);
+
+    out.push_back(makeLoadInstruction(common::Operation::LI, destination, lower, instruction.location));
+    out.push_back(makeLoadInstruction(common::Operation::LUI, destination, upper, instruction.location));
+}
+
+}
+
+void Parser::appendLoweredInstruction(Instruction instruction, std::vector<Instruction>& out) {
+    switch (instruction.operation) {
+        case common::Operation::MOV:
+            appendMov(instruction, out);
+            return;
+
+        case common::Operation::NEG:
+            appendNeg(instruction, out);
+            return;
+
+        case common::Operation::NOT:
+            appendNot(instruction, out);
+            return;
+
+        case common::Operation::LFI:
+            appendLfi(instruction, out);
+            return;
+
+        default:
+            out.push_back(instruction);
+            return;
+    }
+}
+
 Program Parser::parseProgram() {
     Program program;
 
     skipNewLines();
 
     while (!isAtEnd()) {
-        program.instructions.push_back(parseInstruction());
+        appendLoweredInstruction(parseInstruction(), program.instructions);
         skipNewLines();
     }
 
@@ -73,7 +215,7 @@ Instruction Parser::parseInstruction() {
 
     const Token opToken = advance();
 
-    const auto op = common::operationFromSring(opToken.lexeme);
+    const auto op = common::operationFromString(opToken.lexeme);
     if (!op.has_value()) {
         fail(opToken.location, "unsupported operation '" + opToken.lexeme + "'");
     }
@@ -84,14 +226,36 @@ Instruction Parser::parseInstruction() {
 
     switch (*op) {
         case common::Operation::LI:
+        case common::Operation::LUI:
             instruction.operands.push_back(parseRegisterOperand());
-            instruction.operands.push_back(parseImmediateOperand());
+            instruction.operands.push_back(parseImmediateOperand(common::immediate16Max));
             break;
-
         case common::Operation::ADD:
+        case common::Operation::SUB:
+        case common::Operation::AND:
+        case common::Operation::OR:
+        case common::Operation::XOR:
+        case common::Operation::SLL:
+        case common::Operation::SRL:
+        case common::Operation::SRA:
+        case common::Operation::MUL:
+        case common::Operation::UDIV:
+        case common::Operation::SDIV:
             instruction.operands.push_back(parseRegisterOperand());
             instruction.operands.push_back(parseRegisterOperand());
             instruction.operands.push_back(parseRegisterOperand());
+            break;
+        case common::Operation::MOV:
+        case common::Operation::NEG:
+            instruction.operands.push_back(parseRegisterOperand());
+            instruction.operands.push_back(parseRegisterOperand());
+            break;
+        case common::Operation::NOT:
+            instruction.operands.push_back(parseRegisterOperand());
+            break;
+        case common::Operation::LFI:
+            instruction.operands.push_back(parseRegisterOperand());
+            instruction.operands.push_back(parseImmediateOperand(common::immediate32Max));
             break;
     }
 
@@ -120,7 +284,7 @@ RegisterOperand Parser::parseRegisterOperand() {
     return RegisterOperand{static_cast<std::uint8_t>(reg)};
 }
 
-ImmediateOperand Parser::parseImmediateOperand() {
+ImmediateOperand Parser::parseImmediateOperand(std::uint64_t maxValue) {
     expect(TokenType::Number, "expected immediate numeric operand");
 
     const Token token = advance();
@@ -129,14 +293,14 @@ ImmediateOperand Parser::parseImmediateOperand() {
     }
 
     const auto val = *token.numberValue;
-
-    if (val > common::immediateMax) {
-        fail(token.location, "immediate value must be in range [0x0, " + std::to_string(common::immediateMax) + "]");
+    if (val > maxValue) {
+        fail(token.location, "immediate value is out of range");
     }
 
     return ImmediateOperand{
-        .value = static_cast<std::uint16_t>(val)
+        .value = static_cast<std::uint32_t>(val)
     };
+    
 }
 
 void Parser::expect(TokenType type, const std::string& message) {
@@ -150,4 +314,3 @@ void Parser::expect(TokenType type, const std::string& message) {
 }
 
 }
-

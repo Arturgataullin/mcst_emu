@@ -41,9 +41,12 @@ private:
 
     static std::vector<std::uint8_t> readBinaryFile(const std::string& inputPath);
     void validateRegisterIndex(std::uint8_t reg, const char* fieldName) const;
+    std::uint32_t readRegister(std::uint8_t reg) const;
+    void writeRegister(std::uint8_t reg, std::uint32_t value);
 
 private:
     std::array<std::uint32_t, common::registerCount> registers_{};
+    std::uint32_t assemblerTempRegister_ = 0;
     Memory memory_;
 
     std::uint32_t pc_ = common::resetAddress;
@@ -51,4 +54,4 @@ private:
     std::uint32_t programEnd_ = common::resetAddress;
 };
 
-} 
+}

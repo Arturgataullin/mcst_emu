@@ -17,7 +17,7 @@ struct RegisterOperand {
 };
 
 struct ImmediateOperand {
-    std::uint16_t value = 0;
+    std::uint32_t value = 0;
 };
 
 using Operand = std::variant<RegisterOperand, ImmediateOperand>;
@@ -49,9 +49,12 @@ private:
     void skipNewLines() noexcept;
 
     Instruction parseInstruction();
+    
+    void appendLoweredInstruction(Instruction instruction, std::vector<Instruction>& out);
+
     common::Operation parseOperation(const Token& token) const;
     RegisterOperand parseRegisterOperand();
-    ImmediateOperand parseImmediateOperand();
+    ImmediateOperand parseImmediateOperand(std::uint64_t maxValue);
 
     void expect(TokenType type, const std::string& message);
 

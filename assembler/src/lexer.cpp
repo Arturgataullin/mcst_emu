@@ -217,7 +217,7 @@ bool Lexer::isCommentStart(const char ch) {
 }
 
 bool Lexer::isOperationLike(const std::string& upperLexeme) {
-    return common::operationFromSring(upperLexeme).has_value();
+    return common::operationFromString(upperLexeme).has_value();
 }
 
 std::optional<std::int64_t> Lexer::parseRegisterIndex(std::string_view upperLexeme) {

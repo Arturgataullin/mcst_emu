@@ -2,6 +2,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "assembler.h"
+#include "isa.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -102,6 +103,128 @@ TEST_CASE("assembler assembles single LI instruction") {
     fs::remove_all(tempDir);
 }
 
+TEST_CASE("assembler encodes all real register instructions") {
+    const fs::path tempDir = makeTempDir("assemble_real_operations");
+
+    const fs::path inputPath = tempDir / "in.s";
+    const fs::path outputPath = tempDir / "out.o";
+
+    const std::string source =
+        "LUI R1 0x1234\n"
+        "SUB R2 R3 R4\n"
+        "AND R3 R4 R5\n"
+        "OR R4 R5 R6\n"
+        "XOR R5 R6 R7\n"
+        "SLL R6 R7 R8\n"
+        "SRL R7 R8 R9\n"
+        "SRA R8 R9 R10\n"
+        "MUL R9 R10 R11\n"
+        "UDIV R10 R11 R12\n"
+        "SDIV R11 R12 R13\n";
+
+    writeTextFile(inputPath, source);
+
+    assembler::Assembler assembler;
+    assembler.assembleFile(inputPath.string(), outputPath.string());
+
+    const std::vector<std::uint8_t> expected = {
+        0x01, 0x01, 0x34, 0x12,
+        0x03, 0x02, 0x03, 0x04,
+        0x04, 0x03, 0x04, 0x05,
+        0x05, 0x04, 0x05, 0x06,
+        0x06, 0x05, 0x06, 0x07,
+        0x07, 0x06, 0x07, 0x08,
+        0x08, 0x07, 0x08, 0x09,
+        0x09, 0x08, 0x09, 0x0A,
+        0x0A, 0x09, 0x0A, 0x0B,
+        0x0B, 0x0A, 0x0B, 0x0C,
+        0x0C, 0x0B, 0x0C, 0x0D
+    };
+
+    REQUIRE(readBinaryFile(outputPath) == expected);
+
+    fs::remove_all(tempDir);
+}
+
+TEST_CASE("assembler lowers pseudo instructions into expected bytes") {
+    const fs::path tempDir = makeTempDir("assemble_pseudo_operations");
+
+    const fs::path inputPath = tempDir / "in.s";
+    const fs::path outputPath = tempDir / "out.o";
+
+    const std::string source =
+        "MOV R1 R2\n"
+        "NEG R3 R4\n"
+        "NOT R5\n"
+        "LFI R6 0x12345678\n";
+
+    writeTextFile(inputPath, source);
+
+    assembler::Assembler assembler;
+    assembler.assembleFile(inputPath.string(), outputPath.string());
+
+    const std::uint8_t temp = common::assemblerTempRegister;
+    const std::vector<std::uint8_t> expected = {
+        0x05, 0x01, 0x02, 0x02,       // MOV -> OR R1 R2 R2
+        0x00, temp, 0x00, 0x00,       // NEG -> LI temp 0
+        0x03, 0x03, temp, 0x04,       //        SUB R3 temp R4
+        0x00, temp, 0xFF, 0xFF,       // NOT -> LI temp 0xFFFF
+        0x01, temp, 0xFF, 0xFF,       //        LUI temp 0xFFFF
+        0x06, 0x05, 0x05, temp,       //        XOR R5 R5 temp
+        0x00, 0x06, 0x78, 0x56,       // LFI -> LI R6 0x5678
+        0x01, 0x06, 0x34, 0x12        //        LUI R6 0x1234
+    };
+
+    REQUIRE(readBinaryFile(outputPath) == expected);
+
+    fs::remove_all(tempDir);
+}
+
+TEST_CASE("assembler accepts boundary values for LFI") {
+    const fs::path tempDir = makeTempDir("assemble_lfi_boundaries");
+
+    const fs::path inputPath = tempDir / "in.s";
+    const fs::path outputPath = tempDir / "out.o";
+
+    writeTextFile(
+        inputPath,
+        "LFI R0 0x0\n"
+        "LFI R1 0xFFFFFFFF\n"
+    );
+
+    assembler::Assembler assembler;
+    assembler.assembleFile(inputPath.string(), outputPath.string());
+
+    const std::vector<std::uint8_t> expected = {
+        0x00, 0x00, 0x00, 0x00,
+        0x01, 0x00, 0x00, 0x00,
+        0x00, 0x01, 0xFF, 0xFF,
+        0x01, 0x01, 0xFF, 0xFF
+    };
+
+    REQUIRE(readBinaryFile(outputPath) == expected);
+
+    fs::remove_all(tempDir);
+}
+
+TEST_CASE("assembler rejects LFI immediate larger than 32 bits") {
+    const fs::path tempDir = makeTempDir("assembler_bad_lfi_imm");
+
+    const fs::path inputPath = tempDir / "bad_lfi.s";
+    const fs::path outputPath = tempDir / "out.o";
+
+    writeTextFile(inputPath, "LFI R0 0x100000000\n");
+
+    assembler::Assembler assembler;
+
+    REQUIRE_THROWS_WITH(
+        assembler.assembleFile(inputPath.string(), outputPath.string()),
+        ContainsSubstring("immediate value is out of range")
+    );
+
+    fs::remove_all(tempDir);
+}
+
 TEST_CASE("assembler handles empty lines between instructions") {
     const fs::path tempDir = makeTempDir("assemble_empty_lines");
 
@@ -179,7 +302,7 @@ TEST_CASE("assembler throws on too-large immediate") {
 
     REQUIRE_THROWS_WITH(
         assembler.assembleFile(inputPath.string(), outputPath.string()),
-        ContainsSubstring("immediate value must be in range")
+        ContainsSubstring("immediate value is out of range")
     );
 
     fs::remove_all(tempDir);
@@ -232,7 +355,7 @@ TEST_CASE("assembler throws on wrong syntax") {
 
         REQUIRE_THROWS_WITH(
             assembler.assembleFile(inputPath.string(), outputPath.string()),
-            ContainsSubstring("unknown word 'MOV'")
+            ContainsSubstring("expected register operand")
         );
     }
 

@@ -143,6 +143,83 @@ TEST_CASE("parser parses multiple instructions separated by newlines") {
     REQUIRE(asRegister(program.instructions[1].operands[2]).number == 0);
 }
 
+TEST_CASE("parser lowers MOV to OR") {
+    std::vector<Token> tokens = {
+        op("MOV"),
+        reg("R1", 1, 1, 5),
+        reg("R2", 2, 1, 8),
+        eof(1, 10)
+    };
+
+    Program program = Parser(std::move(tokens)).parseProgram();
+
+    REQUIRE(program.instructions.size() == 1);
+    const Instruction& inst = program.instructions[0];
+    REQUIRE(inst.operation == Operation::OR);
+    REQUIRE(asRegister(inst.operands[0]).number == 1);
+    REQUIRE(asRegister(inst.operands[1]).number == 2);
+    REQUIRE(asRegister(inst.operands[2]).number == 2);
+}
+
+TEST_CASE("parser lowers NEG using assembler temporary register") {
+    std::vector<Token> tokens = {
+        op("NEG"),
+        reg("R1", 1, 1, 5),
+        reg("R2", 2, 1, 8),
+        eof(1, 10)
+    };
+
+    Program program = Parser(std::move(tokens)).parseProgram();
+
+    REQUIRE(program.instructions.size() == 2);
+    REQUIRE(program.instructions[0].operation == Operation::LI);
+    REQUIRE(asRegister(program.instructions[0].operands[0]).number == common::assemblerTempRegister);
+    REQUIRE(asImmediate(program.instructions[0].operands[1]).value == 0);
+    REQUIRE(program.instructions[1].operation == Operation::SUB);
+    REQUIRE(asRegister(program.instructions[1].operands[0]).number == 1);
+    REQUIRE(asRegister(program.instructions[1].operands[1]).number == common::assemblerTempRegister);
+    REQUIRE(asRegister(program.instructions[1].operands[2]).number == 2);
+}
+
+TEST_CASE("parser lowers NOT using all-ones temporary value") {
+    std::vector<Token> tokens = {
+        op("NOT"),
+        reg("R3", 3, 1, 5),
+        eof(1, 7)
+    };
+
+    Program program = Parser(std::move(tokens)).parseProgram();
+
+    REQUIRE(program.instructions.size() == 3);
+    REQUIRE(program.instructions[0].operation == Operation::LI);
+    REQUIRE(asImmediate(program.instructions[0].operands[1]).value == 0xFFFF);
+    REQUIRE(program.instructions[1].operation == Operation::LUI);
+    REQUIRE(asImmediate(program.instructions[1].operands[1]).value == 0xFFFF);
+    REQUIRE(program.instructions[2].operation == Operation::XOR);
+    REQUIRE(asRegister(program.instructions[2].operands[0]).number == 3);
+    REQUIRE(asRegister(program.instructions[2].operands[1]).number == 3);
+    REQUIRE(asRegister(program.instructions[2].operands[2]).number == common::assemblerTempRegister);
+}
+
+TEST_CASE("parser lowers LFI into lower and upper loads") {
+    std::vector<Token> tokens = {
+        op("LFI"),
+        reg("R4", 4, 1, 5),
+        num("0x12345678", 0x12345678, 1, 8),
+        eof(1, 18)
+    };
+
+    Program program = Parser(std::move(tokens)).parseProgram();
+
+    REQUIRE(program.instructions.size() == 2);
+    REQUIRE(program.instructions[0].operation == Operation::LI);
+    REQUIRE(asRegister(program.instructions[0].operands[0]).number == 4);
+    REQUIRE(asImmediate(program.instructions[0].operands[1]).value == 0x5678);
+    REQUIRE(program.instructions[1].operation == Operation::LUI);
+    REQUIRE(asRegister(program.instructions[1].operands[0]).number == 4);
+    REQUIRE(asImmediate(program.instructions[1].operands[1]).value == 0x1234);
+}
+
 TEST_CASE("parser rejects instruction with missing operand") {
     std::vector<Token> tokens = {
         op("LI"),
@@ -184,7 +261,7 @@ TEST_CASE("parser rejects extra tokens after instruction") {
 
 TEST_CASE("parser rejects unsupported operation token") {
     std::vector<Token> tokens = {
-        op("SUB"),
+        op("INVALID"),
         reg("R1", 1, 1, 5),
         reg("R2", 2, 1, 8),
         reg("R3", 3, 1, 11),
@@ -193,7 +270,7 @@ TEST_CASE("parser rejects unsupported operation token") {
 
     Parser parser(std::move(tokens));
 
-    REQUIRE_THROWS_WITH(parser.parseProgram(), ContainsSubstring("unsupported operation 'SUB'"));
+    REQUIRE_THROWS_WITH(parser.parseProgram(), ContainsSubstring("unsupported operation 'INVALID'"));
 }
 
 TEST_CASE("parser rejects out-of-range register") {
@@ -219,7 +296,7 @@ TEST_CASE("parser rejects too large immediate") {
 
     Parser parser(std::move(tokens));
 
-    REQUIRE_THROWS_WITH(parser.parseProgram(), ContainsSubstring("immediate value must be in range"));
+    REQUIRE_THROWS_WITH(parser.parseProgram(), ContainsSubstring("immediate value is out of range"));
 }
 
 TEST_CASE("parser rejects wrong operand type for LI destination") {

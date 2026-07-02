@@ -36,9 +36,10 @@ std::vector<uint8_t> Encoder::encode(const Program& program) const {
 
 std::uint32_t Encoder::encodeInstruction(const Instruction& instruction) const {
     switch (instruction.operation) {
-        case common::Operation::LI: {
+        case common::Operation::LI:
+        case common::Operation::LUI: {
             if (instruction.operands.size() != 2) {
-                fail(instruction.location, "LI expects 2 operands");
+                fail(instruction.location, std::string(common::toString(instruction.operation)) + " expects 2 operands");
             }
 
             const std::uint8_t rd = requireRegister(instruction.operands[0], instruction.location, "destination register");
@@ -49,16 +50,26 @@ std::uint32_t Encoder::encodeInstruction(const Instruction& instruction) const {
             // byte2 = imm low byte
             // byte3 = imm high byte
             std::uint32_t word = 0;
-            word |= static_cast<std::uint32_t>(common::opcodeForOperation(common::Operation::LI));
+            word |= static_cast<std::uint32_t>(common::opcodeForOperation(instruction.operation));
             word |= static_cast<std::uint32_t>(rd) << 8;
             word |= static_cast<std::uint32_t>(imm & 0x00FF) << 16;
             word |= static_cast<std::uint32_t>((imm >> 8) & 0x00FF) << 24;
             return word;
         }
 
-        case common::Operation::ADD: {
+        case common::Operation::ADD:
+        case common::Operation::SUB:
+        case common::Operation::AND:
+        case common::Operation::OR:
+        case common::Operation::XOR:
+        case common::Operation::SLL:
+        case common::Operation::SRL:
+        case common::Operation::SRA:
+        case common::Operation::MUL:
+        case common::Operation::UDIV:
+        case common::Operation::SDIV: {
             if (instruction.operands.size() != 3) {
-                fail(instruction.location, "ADD expects 3 operands");
+                fail(instruction.location, std::string(common::toString(instruction.operation)) + " expects 3 operands");
             }
 
             const uint8_t rd = requireRegister(instruction.operands[0], instruction.location, "destination register");
@@ -70,7 +81,7 @@ std::uint32_t Encoder::encodeInstruction(const Instruction& instruction) const {
             // byte2 = rs
             // byte3 = rt
             std::uint32_t word = 0;
-            word |= static_cast<std::uint32_t>(common::opcodeForOperation(common::Operation::ADD));
+            word |= static_cast<std::uint32_t>(common::opcodeForOperation(instruction.operation));
             word |= static_cast<std::uint32_t>(rd) << 8;
             word |= static_cast<std::uint32_t>(rs) << 16;
             word |= static_cast<std::uint32_t>(rt) << 24;
