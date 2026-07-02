@@ -122,6 +122,322 @@ TEST_CASE("lexer tokenizes ADD instruction") {
     CHECK(tokens[5].type == TokenType::EndOfFile);
 }
 
+TEST_CASE("lexer tokenizes LUI instruction") {
+    Lexer lexer("LUI R0 0x1234\n");
+    const auto tokens = lexer.tokenize();
+
+    REQUIRE(tokens.size() == 5);
+
+    CHECK(tokens[0].type == TokenType::Operation);
+    CHECK(tokens[0].lexeme == "LUI");
+
+    CHECK(tokens[1].type == TokenType::Register);
+    CHECK(tokens[1].lexeme == "R0");
+
+    CHECK(tokens[2].type == TokenType::Number);
+    CHECK(tokens[2].lexeme == "0x1234");
+    REQUIRE(tokens[2].numberValue.has_value());
+    CHECK(tokens[2].numberValue.value() == 0x1234);
+
+    CHECK(tokens[3].type == TokenType::NewLine);
+    CHECK(tokens[4].type == TokenType::EndOfFile);
+}
+
+TEST_CASE("lexer tokenizes SUB instruction") {
+    Lexer lexer("SUB R0 R1 R2\n");
+    const auto tokens = lexer.tokenize();
+
+    REQUIRE(tokens.size() == 6);
+
+    CHECK(tokens[0].type == TokenType::Operation);
+    CHECK(tokens[0].lexeme == "SUB");
+
+    CHECK(tokens[1].type == TokenType::Register);
+    CHECK(tokens[1].lexeme == "R0");
+
+    CHECK(tokens[2].type == TokenType::Register);
+    CHECK(tokens[2].lexeme == "R1");
+
+    CHECK(tokens[3].type == TokenType::Register);
+    CHECK(tokens[3].lexeme == "R2");
+
+    CHECK(tokens[4].type == TokenType::NewLine);
+    CHECK(tokens[5].type == TokenType::EndOfFile);
+}
+
+TEST_CASE("lexer tokenizes AND instruction") {
+    Lexer lexer("AND R0 R1 R2\n");
+    const auto tokens = lexer.tokenize();
+
+    REQUIRE(tokens.size() == 6);
+
+    CHECK(tokens[0].type == TokenType::Operation);
+    CHECK(tokens[0].lexeme == "AND");
+
+    CHECK(tokens[1].type == TokenType::Register);
+    CHECK(tokens[1].lexeme == "R0");
+
+    CHECK(tokens[2].type == TokenType::Register);
+    CHECK(tokens[2].lexeme == "R1");
+
+    CHECK(tokens[3].type == TokenType::Register);
+    CHECK(tokens[3].lexeme == "R2");
+
+    CHECK(tokens[4].type == TokenType::NewLine);
+    CHECK(tokens[5].type == TokenType::EndOfFile);
+}
+
+TEST_CASE("lexer tokenizes OR instruction") {
+    Lexer lexer("OR R0 R1 R2\n");
+    const auto tokens = lexer.tokenize();
+
+    REQUIRE(tokens.size() == 6);
+
+    CHECK(tokens[0].type == TokenType::Operation);
+    CHECK(tokens[0].lexeme == "OR");
+
+    CHECK(tokens[1].type == TokenType::Register);
+    CHECK(tokens[1].lexeme == "R0");
+
+    CHECK(tokens[2].type == TokenType::Register);
+    CHECK(tokens[2].lexeme == "R1");
+
+    CHECK(tokens[3].type == TokenType::Register);
+    CHECK(tokens[3].lexeme == "R2");
+
+    CHECK(tokens[4].type == TokenType::NewLine);
+    CHECK(tokens[5].type == TokenType::EndOfFile);
+}
+
+TEST_CASE("lexer tokenizes XOR instruction") {
+    Lexer lexer("XOR R0 R1 R2\n");
+    const auto tokens = lexer.tokenize();
+
+    REQUIRE(tokens.size() == 6);
+
+    CHECK(tokens[0].type == TokenType::Operation);
+    CHECK(tokens[0].lexeme == "XOR");
+
+    CHECK(tokens[1].type == TokenType::Register);
+    CHECK(tokens[1].lexeme == "R0");
+
+    CHECK(tokens[2].type == TokenType::Register);
+    CHECK(tokens[2].lexeme == "R1");
+
+    CHECK(tokens[3].type == TokenType::Register);
+    CHECK(tokens[3].lexeme == "R2");
+
+    CHECK(tokens[4].type == TokenType::NewLine);
+    CHECK(tokens[5].type == TokenType::EndOfFile);
+}
+
+TEST_CASE("lexer tokenizes SLL instruction") {
+    Lexer lexer("SLL R0 R1 R2\n");
+    const auto tokens = lexer.tokenize();
+
+    REQUIRE(tokens.size() == 6);
+
+    CHECK(tokens[0].type == TokenType::Operation);
+    CHECK(tokens[0].lexeme == "SLL");
+
+    CHECK(tokens[1].type == TokenType::Register);
+    CHECK(tokens[1].lexeme == "R0");
+
+    CHECK(tokens[2].type == TokenType::Register);
+    CHECK(tokens[2].lexeme == "R1");
+
+    CHECK(tokens[3].type == TokenType::Register);
+    CHECK(tokens[3].lexeme == "R2");
+
+    CHECK(tokens[4].type == TokenType::NewLine);
+    CHECK(tokens[5].type == TokenType::EndOfFile);
+}
+
+TEST_CASE("lexer tokenizes SRL instruction") {
+    Lexer lexer("SRL R0 R1 R2\n");
+    const auto tokens = lexer.tokenize();
+
+    REQUIRE(tokens.size() == 6);
+
+    CHECK(tokens[0].type == TokenType::Operation);
+    CHECK(tokens[0].lexeme == "SRL");
+
+    CHECK(tokens[1].type == TokenType::Register);
+    CHECK(tokens[1].lexeme == "R0");
+
+    CHECK(tokens[2].type == TokenType::Register);
+    CHECK(tokens[2].lexeme == "R1");
+
+    CHECK(tokens[3].type == TokenType::Register);
+    CHECK(tokens[3].lexeme == "R2");
+
+    CHECK(tokens[4].type == TokenType::NewLine);
+    CHECK(tokens[5].type == TokenType::EndOfFile);
+}
+
+TEST_CASE("lexer tokenizes SRA instruction") {
+    Lexer lexer("SRA R0 R1 R2\n");
+    const auto tokens = lexer.tokenize();
+
+    REQUIRE(tokens.size() == 6);
+
+    CHECK(tokens[0].type == TokenType::Operation);
+    CHECK(tokens[0].lexeme == "SRA");
+
+    CHECK(tokens[1].type == TokenType::Register);
+    CHECK(tokens[1].lexeme == "R0");
+
+    CHECK(tokens[2].type == TokenType::Register);
+    CHECK(tokens[2].lexeme == "R1");
+
+    CHECK(tokens[3].type == TokenType::Register);
+    CHECK(tokens[3].lexeme == "R2");
+
+    CHECK(tokens[4].type == TokenType::NewLine);
+    CHECK(tokens[5].type == TokenType::EndOfFile);
+}
+
+TEST_CASE("lexer tokenizes MUL instruction") {
+    Lexer lexer("MUL R0 R1 R2\n");
+    const auto tokens = lexer.tokenize();
+
+    REQUIRE(tokens.size() == 6);
+
+    CHECK(tokens[0].type == TokenType::Operation);
+    CHECK(tokens[0].lexeme == "MUL");
+
+    CHECK(tokens[1].type == TokenType::Register);
+    CHECK(tokens[1].lexeme == "R0");
+
+    CHECK(tokens[2].type == TokenType::Register);
+    CHECK(tokens[2].lexeme == "R1");
+
+    CHECK(tokens[3].type == TokenType::Register);
+    CHECK(tokens[3].lexeme == "R2");
+
+    CHECK(tokens[4].type == TokenType::NewLine);
+    CHECK(tokens[5].type == TokenType::EndOfFile);
+}
+
+TEST_CASE("lexer tokenizes UDIV instruction") {
+    Lexer lexer("UDIV R0 R1 R2\n");
+    const auto tokens = lexer.tokenize();
+
+    REQUIRE(tokens.size() == 6);
+
+    CHECK(tokens[0].type == TokenType::Operation);
+    CHECK(tokens[0].lexeme == "UDIV");
+
+    CHECK(tokens[1].type == TokenType::Register);
+    CHECK(tokens[1].lexeme == "R0");
+
+    CHECK(tokens[2].type == TokenType::Register);
+    CHECK(tokens[2].lexeme == "R1");
+
+    CHECK(tokens[3].type == TokenType::Register);
+    CHECK(tokens[3].lexeme == "R2");
+
+    CHECK(tokens[4].type == TokenType::NewLine);
+    CHECK(tokens[5].type == TokenType::EndOfFile);
+}
+
+TEST_CASE("lexer tokenizes SDIV instruction") {
+    Lexer lexer("SDIV R0 R1 R2\n");
+    const auto tokens = lexer.tokenize();
+
+    REQUIRE(tokens.size() == 6);
+
+    CHECK(tokens[0].type == TokenType::Operation);
+    CHECK(tokens[0].lexeme == "SDIV");
+
+    CHECK(tokens[1].type == TokenType::Register);
+    CHECK(tokens[1].lexeme == "R0");
+
+    CHECK(tokens[2].type == TokenType::Register);
+    CHECK(tokens[2].lexeme == "R1");
+
+    CHECK(tokens[3].type == TokenType::Register);
+    CHECK(tokens[3].lexeme == "R2");
+
+    CHECK(tokens[4].type == TokenType::NewLine);
+    CHECK(tokens[5].type == TokenType::EndOfFile);
+}
+
+TEST_CASE("lexer tokenizes MOV instruction") {
+    Lexer lexer("MOV R0 R1\n");
+    const auto tokens = lexer.tokenize();
+
+    REQUIRE(tokens.size() == 5);
+
+    CHECK(tokens[0].type == TokenType::Operation);
+    CHECK(tokens[0].lexeme == "MOV");
+
+    CHECK(tokens[1].type == TokenType::Register);
+    CHECK(tokens[1].lexeme == "R0");
+
+    CHECK(tokens[2].type == TokenType::Register);
+    CHECK(tokens[2].lexeme == "R1");
+
+    CHECK(tokens[3].type == TokenType::NewLine);
+    CHECK(tokens[4].type == TokenType::EndOfFile);
+}
+
+TEST_CASE("lexer tokenizes NEG instruction") {
+    Lexer lexer("NEG R0 R1\n");
+    const auto tokens = lexer.tokenize();
+
+    REQUIRE(tokens.size() == 5);
+
+    CHECK(tokens[0].type == TokenType::Operation);
+    CHECK(tokens[0].lexeme == "NEG");
+
+    CHECK(tokens[1].type == TokenType::Register);
+    CHECK(tokens[1].lexeme == "R0");
+
+    CHECK(tokens[2].type == TokenType::Register);
+    CHECK(tokens[2].lexeme == "R1");
+
+    CHECK(tokens[3].type == TokenType::NewLine);
+    CHECK(tokens[4].type == TokenType::EndOfFile);
+}
+
+TEST_CASE("lexer tokenizes NOT instruction") {
+    Lexer lexer("NOT R0\n");
+    const auto tokens = lexer.tokenize();
+
+    REQUIRE(tokens.size() == 4);
+
+    CHECK(tokens[0].type == TokenType::Operation);
+    CHECK(tokens[0].lexeme == "NOT");
+
+    CHECK(tokens[1].type == TokenType::Register);
+    CHECK(tokens[1].lexeme == "R0");
+
+    CHECK(tokens[2].type == TokenType::NewLine);
+    CHECK(tokens[3].type == TokenType::EndOfFile);
+}
+
+TEST_CASE("lexer tokenizes LFI instruction") {
+    Lexer lexer("LFI R0 0x12345678\n");
+    const auto tokens = lexer.tokenize();
+
+    REQUIRE(tokens.size() == 5);
+
+    CHECK(tokens[0].type == TokenType::Operation);
+    CHECK(tokens[0].lexeme == "LFI");
+
+    CHECK(tokens[1].type == TokenType::Register);
+    CHECK(tokens[1].lexeme == "R0");
+
+    CHECK(tokens[2].type == TokenType::Number);
+    CHECK(tokens[2].lexeme == "0x12345678");
+    REQUIRE(tokens[2].numberValue.has_value());
+    CHECK(tokens[2].numberValue.value() == 0x12345678);
+
+    CHECK(tokens[3].type == TokenType::NewLine);
+    CHECK(tokens[4].type == TokenType::EndOfFile);
+}
+
 TEST_CASE("lexer tokenizes multiple instructions") {
     Lexer lexer("ADD R0 R1 R2\nLI R0 0x1\n");
     const auto tokens = lexer.tokenize();

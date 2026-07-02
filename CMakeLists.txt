@@ -5,6 +5,11 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+add_library(project_warnings INTERFACE)
+target_compile_options(project_warnings INTERFACE
+    $<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang>:-Wall;-Wextra>
+)
+
 add_subdirectory(common)
 add_subdirectory(assembler)
 add_subdirectory(emulator)

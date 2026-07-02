@@ -87,10 +87,9 @@ std::uint32_t Encoder::encodeInstruction(const Instruction& instruction) const {
             word |= static_cast<std::uint32_t>(rt) << 24;
             return word;
         }
-
+        default:
+            fail(instruction.location, "unknown operation during encoding");
     }
-
-    fail(instruction.location, "unknown operation during encoding");
 }
 
 std::uint8_t Encoder::requireRegister(const Operand& operand, const SourceLocation& location, const char* operandName) const {
@@ -106,7 +105,12 @@ std::uint16_t Encoder::requireImmediate(const Operand& operand, const SourceLoca
         fail(location, std::string(operandName) + " must be an immediate");
     }
 
-    return std::get<ImmediateOperand>(operand).value;
+    const auto value = std::get<ImmediateOperand>(operand).value;
+    if (value > common::immediate16Max) {
+        fail(location, std::string(operandName) + " must fit into 16 bits");
+    }
+
+    return static_cast<std::uint16_t>(value);
 }
 
 [[noreturn]] void Encoder::fail(const SourceLocation& location, const std::string& message) const {
