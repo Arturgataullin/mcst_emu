@@ -96,8 +96,8 @@ namespace common {
             case Operation::MUL:  return Opcode::MUL;
             case Operation::UDIV: return Opcode::UDIV;
             case Operation::SDIV: return Opcode::SDIV;
+            default:
+                throw std::logic_error("unknown operation");
         }
-
-        throw std::logic_error("unknown operation");
     }
 }

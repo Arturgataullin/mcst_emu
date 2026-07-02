@@ -52,7 +52,6 @@ private:
     
     void appendLoweredInstruction(Instruction instruction, std::vector<Instruction>& out);
 
-    common::Operation parseOperation(const Token& token) const;
     RegisterOperand parseRegisterOperand();
     ImmediateOperand parseImmediateOperand(std::uint64_t maxValue);
 

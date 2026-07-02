@@ -34,7 +34,7 @@ bool isWordStart(const char ch) {
 }
 
 bool isNewLine(const char ch, const char next_ch) {
-    return (ch == '\n' || ch == '\r' && next_ch == '\n');
+    return (ch == '\n' || (ch == '\r' && next_ch == '\n'));
 }
 
 }
@@ -60,7 +60,7 @@ std::vector<Token> Lexer::tokenize() {
             tokens.push_back(lexNumber());
         } 
         else if (isWordStart(ch)) {
-            tokens.push_back(lexOprationOrRegister());
+            tokens.push_back(lexOperationOrRegister());
         } 
         else if (isNewLine(ch, next_ch)) {
             advance();
@@ -75,7 +75,7 @@ std::vector<Token> Lexer::tokenize() {
     return tokens;
 }
 
-Token Lexer::lexOprationOrRegister() {
+Token Lexer::lexOperationOrRegister() {
     const SourceLocation location{line_, column_};
     const std::size_t start = pos_;
 
@@ -264,10 +264,6 @@ std::uint64_t Lexer::parseInteger(const std::string& lexeme, const SourceLocatio
 
         if (consumed != lexeme.size()) {
             throw std::invalid_argument("literal was not fully consumed");
-        }
-
-        if (value > std::numeric_limits<std::uint64_t>::max()) {
-            throw std::invalid_argument("integer literal is too large for uint64");
         }
 
         return value;

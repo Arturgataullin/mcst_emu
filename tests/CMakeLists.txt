@@ -32,6 +32,10 @@ add_executable(emulator_tests
     emulator/emulator_tests.cpp
 )
 
+add_executable(assembler_emulator_tests
+    integration/assembler_emulator_tests.cpp
+)
+
 target_link_libraries(assembler_lexer_tests PRIVATE assembler_lib Catch2::Catch2WithMain)
 
 target_link_libraries(assembler_parser_tests PRIVATE assembler_lib Catch2::Catch2WithMain)
@@ -44,6 +48,11 @@ target_link_libraries(emulator_memory_tests PRIVATE emulator_lib Catch2::Catch2W
 
 target_link_libraries(emulator_tests PRIVATE emulator_lib Catch2::Catch2WithMain)
 
+target_link_libraries(
+    assembler_emulator_tests
+    PRIVATE assembler_lib emulator_lib Catch2::Catch2WithMain
+)
+
 include(Catch)
 
 catch_discover_tests(assembler_lexer_tests)
@@ -52,3 +61,4 @@ catch_discover_tests(assembler_encoder_tests)
 catch_discover_tests(assembler_tests)
 catch_discover_tests(emulator_memory_tests)
 catch_discover_tests(emulator_tests)
+catch_discover_tests(assembler_emulator_tests)

@@ -1,0 +1,5 @@
+# Pseudo instructions
+LFI R0 0x12345678
+MOV R1 R0
+NEG R2 R1
+NOT R2

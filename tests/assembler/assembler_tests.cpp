@@ -3,6 +3,7 @@
 
 #include "assembler.h"
 #include "isa.h"
+#include "../support/temporary_directory.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -16,12 +17,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-std::string readTextFile(const fs::path& path) {
-    std::ifstream in(path, std::ios::binary);
-    REQUIRE(in.good());
-
-    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-}
+using test_support::TemporaryDirectory;
 
 std::vector<std::uint8_t> readBinaryFile(const fs::path& path) {
     std::ifstream in(path, std::ios::binary);
@@ -38,20 +34,11 @@ void writeTextFile(const fs::path& path, const std::string& content) {
     REQUIRE(out.good());
 }
 
-fs::path makeTempDir(const std::string& nameSuffix) {
-    const fs::path dir =
-        fs::temp_directory_path() /
-        fs::path("assembler_tests_" + nameSuffix);
-
-    fs::remove_all(dir);
-    fs::create_directories(dir);
-    return dir;
-}
-
 }
 
 TEST_CASE("assembler assembles sample program into expected bytes") {
-    const fs::path tempDir = makeTempDir("assemble_sample");
+    const TemporaryDirectory temp("assembler_tests_assemble_sample");
+    const fs::path& tempDir = temp.path();
 
     const fs::path inputPath = tempDir / "in.s";
     const fs::path outputPath = tempDir / "out.o";
@@ -77,12 +64,11 @@ TEST_CASE("assembler assembles sample program into expected bytes") {
     };
 
     REQUIRE(bytes == expected);
-
-    fs::remove_all(tempDir);
 }
 
 TEST_CASE("assembler assembles single LI instruction") {
-    const fs::path tempDir = makeTempDir("assemble_single_li");
+    const TemporaryDirectory temp("assembler_tests_assemble_single_li");
+    const fs::path& tempDir = temp.path();
 
     const fs::path inputPath = tempDir / "in.s";
     const fs::path outputPath = tempDir / "out.o";
@@ -99,12 +85,11 @@ TEST_CASE("assembler assembles single LI instruction") {
     };
 
     REQUIRE(bytes == expected);
-
-    fs::remove_all(tempDir);
 }
 
 TEST_CASE("assembler encodes all real register instructions") {
-    const fs::path tempDir = makeTempDir("assemble_real_operations");
+    const TemporaryDirectory temp("assembler_tests_assemble_real_operations");
+    const fs::path& tempDir = temp.path();
 
     const fs::path inputPath = tempDir / "in.s";
     const fs::path outputPath = tempDir / "out.o";
@@ -142,12 +127,11 @@ TEST_CASE("assembler encodes all real register instructions") {
     };
 
     REQUIRE(readBinaryFile(outputPath) == expected);
-
-    fs::remove_all(tempDir);
 }
 
 TEST_CASE("assembler lowers pseudo instructions into expected bytes") {
-    const fs::path tempDir = makeTempDir("assemble_pseudo_operations");
+    const TemporaryDirectory temp("assembler_tests_assemble_pseudo_operations");
+    const fs::path& tempDir = temp.path();
 
     const fs::path inputPath = tempDir / "in.s";
     const fs::path outputPath = tempDir / "out.o";
@@ -163,25 +147,24 @@ TEST_CASE("assembler lowers pseudo instructions into expected bytes") {
     assembler::Assembler assembler;
     assembler.assembleFile(inputPath.string(), outputPath.string());
 
-    const std::uint8_t temp = common::assemblerTempRegister;
+    const std::uint8_t tempRegister = common::assemblerTempRegister;
     const std::vector<std::uint8_t> expected = {
         0x05, 0x01, 0x02, 0x02,       // MOV -> OR R1 R2 R2
-        0x00, temp, 0x00, 0x00,       // NEG -> LI temp 0
-        0x03, 0x03, temp, 0x04,       //        SUB R3 temp R4
-        0x00, temp, 0xFF, 0xFF,       // NOT -> LI temp 0xFFFF
-        0x01, temp, 0xFF, 0xFF,       //        LUI temp 0xFFFF
-        0x06, 0x05, 0x05, temp,       //        XOR R5 R5 temp
+        0x00, tempRegister, 0x00, 0x00, // NEG -> LI temp 0
+        0x03, 0x03, tempRegister, 0x04, //        SUB R3 temp R4
+        0x00, tempRegister, 0xFF, 0xFF, // NOT -> LI temp 0xFFFF
+        0x01, tempRegister, 0xFF, 0xFF, //        LUI temp 0xFFFF
+        0x06, 0x05, 0x05, tempRegister, //        XOR R5 R5 temp
         0x00, 0x06, 0x78, 0x56,       // LFI -> LI R6 0x5678
         0x01, 0x06, 0x34, 0x12        //        LUI R6 0x1234
     };
 
     REQUIRE(readBinaryFile(outputPath) == expected);
-
-    fs::remove_all(tempDir);
 }
 
 TEST_CASE("assembler accepts boundary values for LFI") {
-    const fs::path tempDir = makeTempDir("assemble_lfi_boundaries");
+    const TemporaryDirectory temp("assembler_tests_assemble_lfi_boundaries");
+    const fs::path& tempDir = temp.path();
 
     const fs::path inputPath = tempDir / "in.s";
     const fs::path outputPath = tempDir / "out.o";
@@ -203,12 +186,11 @@ TEST_CASE("assembler accepts boundary values for LFI") {
     };
 
     REQUIRE(readBinaryFile(outputPath) == expected);
-
-    fs::remove_all(tempDir);
 }
 
 TEST_CASE("assembler rejects LFI immediate larger than 32 bits") {
-    const fs::path tempDir = makeTempDir("assembler_bad_lfi_imm");
+    const TemporaryDirectory temp("assembler_tests_bad_lfi_imm");
+    const fs::path& tempDir = temp.path();
 
     const fs::path inputPath = tempDir / "bad_lfi.s";
     const fs::path outputPath = tempDir / "out.o";
@@ -221,12 +203,11 @@ TEST_CASE("assembler rejects LFI immediate larger than 32 bits") {
         assembler.assembleFile(inputPath.string(), outputPath.string()),
         ContainsSubstring("immediate value is out of range")
     );
-
-    fs::remove_all(tempDir);
 }
 
 TEST_CASE("assembler handles empty lines between instructions") {
-    const fs::path tempDir = makeTempDir("assemble_empty_lines");
+    const TemporaryDirectory temp("assembler_tests_assemble_empty_lines");
+    const fs::path& tempDir = temp.path();
 
     const fs::path inputPath = tempDir / "in.s";
     const fs::path outputPath = tempDir / "out.o";
@@ -252,12 +233,11 @@ TEST_CASE("assembler handles empty lines between instructions") {
     };
 
     REQUIRE(bytes == expected);
-
-    fs::remove_all(tempDir);
 }
 
 TEST_CASE("assembler throws when input file does not exist") {
-    const fs::path tempDir = makeTempDir("assembler_missing_input");
+    const TemporaryDirectory temp("assembler_tests_missing_input");
+    const fs::path& tempDir = temp.path();
 
     const fs::path inputPath = tempDir / "missing.s";
     const fs::path outputPath = tempDir / "out.o";
@@ -268,12 +248,11 @@ TEST_CASE("assembler throws when input file does not exist") {
         assembler.assembleFile(inputPath.string(), outputPath.string()),
         ContainsSubstring("failed to open input file")
     );
-
-    fs::remove_all(tempDir);
 }
 
 TEST_CASE("assembler throws on out-of-range register") {
-    const fs::path tempDir = makeTempDir("assembler_bad_register");
+    const TemporaryDirectory temp("assembler_tests_bad_register");
+    const fs::path& tempDir = temp.path();
 
     const fs::path inputPath = tempDir / "bad_reg.s";
     const fs::path outputPath = tempDir / "out.o";
@@ -286,12 +265,11 @@ TEST_CASE("assembler throws on out-of-range register") {
         assembler.assembleFile(inputPath.string(), outputPath.string()),
         ContainsSubstring("register number must be from 0 to 15")
     );
-
-    fs::remove_all(tempDir);
 }
 
 TEST_CASE("assembler throws on too-large immediate") {
-    const fs::path tempDir = makeTempDir("assembler_bad_imm");
+    const TemporaryDirectory temp("assembler_tests_bad_imm");
+    const fs::path& tempDir = temp.path();
 
     const fs::path inputPath = tempDir / "bad_imm.s";
     const fs::path outputPath = tempDir / "out.o";
@@ -304,12 +282,11 @@ TEST_CASE("assembler throws on too-large immediate") {
         assembler.assembleFile(inputPath.string(), outputPath.string()),
         ContainsSubstring("immediate value is out of range")
     );
-
-    fs::remove_all(tempDir);
 }
 
 TEST_CASE("assembler assembles empty file into empty output") {
-    const fs::path tempDir = makeTempDir("assemble_empty_file");
+    const TemporaryDirectory temp("assembler_tests_assemble_empty_file");
+    const fs::path& tempDir = temp.path();
 
     const fs::path inputPath = tempDir / "empty.s";
     const fs::path outputPath = tempDir / "out.o";
@@ -323,13 +300,11 @@ TEST_CASE("assembler assembles empty file into empty output") {
 
     const std::vector<std::uint8_t> bytes = readBinaryFile(outputPath);
     REQUIRE(bytes.empty());
-
-    fs::remove_all(tempDir);
 }
 
 TEST_CASE("assembler throws on wrong syntax") {
-    
-    const fs::path tempDir = makeTempDir("assembler_wrong_syntax");
+    const TemporaryDirectory temp("assembler_tests_wrong_syntax");
+    const fs::path& tempDir = temp.path();
 
     SECTION ("case 1") {
         const fs::path inputPath = tempDir / "wrong_syntax1.s";
@@ -385,10 +360,5 @@ TEST_CASE("assembler throws on wrong syntax") {
             assembler.assembleFile(inputPath.string(), outputPath.string()),
             ContainsSubstring("expected register operand")
         );
-
-        fs::remove_all(tempDir);
     }
-
-    
-    fs::remove_all(tempDir);
 }

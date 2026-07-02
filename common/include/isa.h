@@ -13,7 +13,7 @@ namespace common {
 
     inline constexpr std::size_t registerCount = 16;
     inline constexpr std::size_t registerSize = 32;
-    inline constexpr std::size_t regMemoreSize = registerCount * registerSize; // 16 registers of 4 bytes each
+    inline constexpr std::size_t regMemoreSize = registerCount * registerSize; // 16 registers of 32 bits each
 
     
     inline constexpr std::size_t opMemorySize = 1024; // for 32 instructions of 4 bytes each
