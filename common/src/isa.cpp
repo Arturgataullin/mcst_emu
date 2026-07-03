@@ -81,6 +81,26 @@ namespace common {
         return "UNKNOWN";
     }
 
+    std::string_view toString(Opcode opcode) {
+        switch (opcode) {
+            case Opcode::LI:   return "LI";
+            case Opcode::LUI:  return "LUI";
+            case Opcode::ADD:  return "ADD";
+            case Opcode::SUB:  return "SUB";
+            case Opcode::AND:  return "AND";
+            case Opcode::OR:   return "OR";
+            case Opcode::XOR:  return "XOR";
+            case Opcode::SLL:  return "SLL";
+            case Opcode::SRL:  return "SRL";
+            case Opcode::SRA:  return "SRA";
+            case Opcode::MUL:  return "MUL";
+            case Opcode::UDIV: return "UDIV";
+            case Opcode::SDIV: return "SDIV";
+        }
+
+        return "UNKNOWN";
+    }
+
     Opcode opcodeForOperation(Operation op) {
         switch (op) {
             case Operation::LI:   return Opcode::LI;

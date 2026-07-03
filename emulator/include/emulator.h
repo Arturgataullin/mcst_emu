@@ -9,6 +9,16 @@
 #include "isa.h"
 #include "opMemory.h"
 
+// при сборке вне CMake трассировка по умолчанию включена
+#ifndef MCST_TRACING
+#define MCST_TRACING 1
+#endif
+
+#if MCST_TRACING
+#include <iosfwd>
+#include "trace.h"
+#endif
+
 namespace emulator {
 
 struct DecodedInstruction {
@@ -34,6 +44,10 @@ public:
 
     std::string dumpRegisters() const;
 
+#if MCST_TRACING
+    void enableDisasmTrace(std::ostream& output, std::vector<TickRange> ranges = {});
+#endif
+
 private:
     std::uint32_t fetchInstructionWord() const;
     DecodedInstruction decode(std::uint32_t word) const;
@@ -44,6 +58,22 @@ private:
     std::uint32_t readRegister(std::uint8_t reg) const;
     void writeRegister(std::uint8_t reg, std::uint32_t value);
 
+#if MCST_TRACING
+    // снимок нужен для вывода исходных значений регистров-источников
+    struct StateSnapshot {
+        std::array<std::uint32_t, common::registerCount> registers{};
+        std::uint32_t tempRegister = 0;
+    };
+
+    void writeDisasmTrace(
+        std::uint64_t tick,
+        std::uint32_t address,
+        std::uint32_t encoding,
+        const DecodedInstruction& instruction,
+        const StateSnapshot& before
+    ) const;
+#endif
+
 private:
     std::array<std::uint32_t, common::registerCount> registers_{};
     std::uint32_t assemblerTempRegister_ = 0;
@@ -52,6 +82,12 @@ private:
     std::uint32_t pc_ = common::resetAddress;
     std::uint32_t programBase_ = common::resetAddress;
     std::uint32_t programEnd_ = common::resetAddress;
+
+#if MCST_TRACING
+    std::ostream* traceOutput_ = nullptr;
+    std::vector<TickRange> traceRanges_;
+    std::uint64_t tick_ = 0;
+#endif
 };
 
 }

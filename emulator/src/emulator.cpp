@@ -35,6 +35,10 @@ void Emulator::loadProgram(const std::vector<std::uint8_t>& program, std::uint32
     programBase_ = baseAddress;
     programEnd_ = baseAddress + static_cast<std::uint32_t>(program.size());
     pc_ = baseAddress;
+
+#if MCST_TRACING
+    tick_ = 0;
+#endif
 }
 
 const std::array<std::uint32_t, common::registerCount>& Emulator::registers() const noexcept {
@@ -217,9 +221,40 @@ void Emulator::step() {
         return;
     }
 
+    const std::uint32_t instructionAddress = pc_;
     const std::uint32_t word = fetchInstructionWord();
     const DecodedInstruction instruction = decode(word);
+
+#if MCST_TRACING
+    // номер такта равен числу команд, исполненных перед текущей командой
+    const std::uint64_t currentTick = tick_;
+    const bool emitTrace =
+        traceOutput_ != nullptr &&
+        containsTick(traceRanges_, currentTick);
+
+    StateSnapshot before{};
+    if (emitTrace) {
+        // источники должны выводиться со значениями до исполнения команды
+        before.registers = registers_;
+        before.tempRegister = assemblerTempRegister_;
+    }
+#endif
+
     execute(instruction);
+
+#if MCST_TRACING
+    // счётчик увеличивается только после успешного исполнения команды
+    ++tick_;
+    if (emitTrace) {
+        writeDisasmTrace(
+            currentTick,
+            instructionAddress - programBase_,
+            word,
+            instruction,
+            before
+        );
+    }
+#endif
 }
 
 void Emulator::run() {
