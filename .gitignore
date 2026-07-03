@@ -1,4 +1,5 @@
 build/
+build-no-trace/
 *.o
 exaples/*.o
 .vscode/

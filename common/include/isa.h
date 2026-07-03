@@ -65,6 +65,7 @@ namespace common {
 
     std::optional<Operation> operationFromString(std::string_view lexeme);
     std::string_view toString(Operation op);
+    std::string_view toString(Opcode opcode);
     Opcode opcodeForOperation(Operation op);
 
 }

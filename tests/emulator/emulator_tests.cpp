@@ -4,6 +4,9 @@
 #include "emulator.h"
 
 #include <cstdint>
+#include <sstream>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 using Catch::Matchers::ContainsSubstring;
@@ -413,3 +416,71 @@ TEST_CASE("emulator validates every register field in RRR instruction") {
         );
     }
 }
+
+#if MCST_TRACING
+
+TEST_CASE("emulator writes disassembly trace with post-state destination values") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x03, 0xEF, 0xBE, // LI R3 0xBEEF
+        0x02, 0x01, 0x02, 0x03  // ADD R1 R2 R3
+    };
+
+    std::ostringstream trace;
+    emulator::Emulator emulator;
+    emulator.loadProgram(program, 16);
+    emulator.enableDisasmTrace(trace);
+    emulator.run();
+
+    REQUIRE(
+        trace.str() ==
+        "---- 0 0x0 ----\n"
+        "0xbeef0300 LI R3 (0xbeef) imm (0xbeef)\n"
+        "---- 1 0x4 ----\n"
+        "0x03020102 ADD R1 (0xbeef) R2 (0x0) R3 (0xbeef)\n"
+    );
+}
+
+TEST_CASE("trace reads aliased source operands from pre-instruction state") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x01, 0x05, 0x00, // LI R1 5
+        0x02, 0x01, 0x01, 0x01  // ADD R1 R1 R1
+    };
+
+    std::ostringstream trace;
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.enableDisasmTrace(trace, {{1, 1}});
+    emulator.run();
+
+    REQUIRE(
+        trace.str() ==
+        "---- 1 0x4 ----\n"
+        "0x01010102 ADD R1 (0xa) R1 (0x5) R1 (0x5)\n"
+    );
+}
+
+TEST_CASE("trace tick ranges are inclusive and overlapping ranges are merged") {
+    const auto ranges = emulator::parseTickRanges("7-10,0,3-5,4-8");
+
+    REQUIRE(ranges.size() == 2);
+    REQUIRE(ranges[0].begin == 0);
+    REQUIRE(ranges[0].end == 0);
+    REQUIRE(ranges[1].begin == 3);
+    REQUIRE(ranges[1].end == 10);
+
+    REQUIRE(emulator::containsTick(ranges, 0));
+    REQUIRE_FALSE(emulator::containsTick(ranges, 1));
+    REQUIRE_FALSE(emulator::containsTick(ranges, 2));
+    REQUIRE(emulator::containsTick(ranges, 3));
+    REQUIRE(emulator::containsTick(ranges, 10));
+    REQUIRE_FALSE(emulator::containsTick(ranges, 11));
+}
+
+TEST_CASE("trace tick range parser rejects malformed ranges") {
+    REQUIRE_THROWS_AS(emulator::parseTickRanges(""), std::invalid_argument);
+    REQUIRE_THROWS_AS(emulator::parseTickRanges("1,,2"), std::invalid_argument);
+    REQUIRE_THROWS_AS(emulator::parseTickRanges("5-2"), std::invalid_argument);
+    REQUIRE_THROWS_AS(emulator::parseTickRanges("1-x"), std::invalid_argument);
+}
+
+#endif
