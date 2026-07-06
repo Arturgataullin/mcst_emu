@@ -483,4 +483,33 @@ TEST_CASE("trace tick range parser rejects malformed ranges") {
     REQUIRE_THROWS_AS(emulator::parseTickRanges("1-x"), std::invalid_argument);
 }
 
+TEST_CASE("saves the parameters of the used stream") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x01, 0x00 // LI R0 1
+    };
+
+    std::ostringstream trace;
+    trace << std::uppercase << std::oct;
+    trace.fill('*');
+    trace.width(17);
+
+    const auto expectedFlags = trace.flags();
+    const auto expectedFill = trace.fill();
+    const auto expectedWidth = trace.width();
+
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.enableDisasmTrace(trace);
+    emulator.run();
+
+    REQUIRE(
+        trace.str() ==
+        "---- 0 0x0 ----\n"
+        "0x00010000 LI R0 (0x1) imm (0x1)\n"
+    );
+    REQUIRE(trace.flags() == expectedFlags);
+    REQUIRE(trace.fill() == expectedFill);
+    REQUIRE(trace.width() == expectedWidth);
+}
+
 #endif

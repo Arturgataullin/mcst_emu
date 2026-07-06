@@ -7,7 +7,6 @@
 #include <iomanip>
 #include <limits>
 #include <ostream>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <system_error>
@@ -15,63 +14,107 @@
 
 namespace emulator {
 namespace {
+    
+    // raii класс для сохранения и восстановления состояни потока
+    class StreamStateGuard {
+    public:
+        explicit StreamStateGuard(std::ostream& out)
+        : out_(out),
+            flags_(out.flags()),
+            fill_(out.fill()),
+            width_(out.width()) {
+                out_.width(0);
+            }
+        
+        ~StreamStateGuard() {
+            out_.flags(flags_);
+            out_.fill(fill_);
+            out_.width(width_);
+        }
 
-std::uint64_t parseTick(std::string_view text) {
-    if (text.empty()) {
-        throw std::invalid_argument("empty tick in --trace-ticks");
+        StreamStateGuard(const StreamStateGuard&) = delete;
+        StreamStateGuard& operator=(const StreamStateGuard&) = delete;
+
+    private:
+        std::ostream& out_;
+        std::ios_base::fmtflags flags_;
+        char fill_;
+        std::streamsize width_;
+    };
+
+
+    std::uint64_t parseTick(std::string_view text) {
+        if (text.empty()) {
+            throw std::invalid_argument("empty tick in --trace-ticks");
+        }
+
+        std::uint64_t value = 0;
+        const char* first = text.data();
+        const char* last = first + text.size();
+        const auto result = std::from_chars(first, last, value);
+
+        if (result.ec != std::errc{} || result.ptr != last) {
+            throw std::invalid_argument(
+                "invalid tick in --trace-ticks: " + std::string(text)
+            );
+        }
+        return value;
     }
 
-    std::uint64_t value = 0;
-    const char* first = text.data();
-    const char* last = first + text.size();
-    const auto result = std::from_chars(first, last, value);
+    std::vector<TickRange> normalizeRanges(std::vector<TickRange> ranges) {
+        // после сортировки пересечения можно объединить за один проход
+        std::sort(ranges.begin(), ranges.end(), [](const TickRange& lhs, const TickRange& rhs) {
+            if (lhs.begin != rhs.begin) {
+                return lhs.begin < rhs.begin;
+            }
+            return lhs.end < rhs.end;
+        });
 
-    if (result.ec != std::errc{} || result.ptr != last) {
-        throw std::invalid_argument(
-            "invalid tick in --trace-ticks: " + std::string(text)
-        );
+        std::vector<TickRange> merged;
+        for (const TickRange& range : ranges) {
+            if (range.begin > range.end) {
+                throw std::invalid_argument("trace tick range is reversed");
+            }
+            if (merged.empty()) {
+                merged.push_back(range);
+                continue;
+            }
+
+            TickRange& previous = merged.back();
+            // соседние диапазоны эквивалентны одному непрерывному диапазону
+            const bool adjacent =
+                previous.end != std::numeric_limits<std::uint64_t>::max() && range.begin == previous.end + 1;
+
+            if (range.begin <= previous.end || adjacent) {
+                previous.end = std::max(previous.end, range.end);
+            } 
+            else {
+                merged.push_back(range);
+            }
+        }
+        return merged;
     }
-    return value;
-}
 
-std::vector<TickRange> normalizeRanges(std::vector<TickRange> ranges) {
-    // после сортировки пересечения можно объединить за один проход
-    std::sort(ranges.begin(), ranges.end(), [](const TickRange& lhs, const TickRange& rhs) {
-        if (lhs.begin != rhs.begin) {
-            return lhs.begin < rhs.begin;
-        }
-        return lhs.end < rhs.end;
-    });
 
-    std::vector<TickRange> merged;
-    for (const TickRange& range : ranges) {
-        if (range.begin > range.end) {
-            throw std::invalid_argument("trace tick range is reversed");
-        }
-        if (merged.empty()) {
-            merged.push_back(range);
-            continue;
-        }
+    void writeHexValue(std::ostream& out, std::uint32_t value) {
+        out << "0x"
+            << std::hex
+            << std::nouppercase
+            << value;
+    }   
 
-        TickRange& previous = merged.back();
-        // соседние диапазоны эквивалентны одному непрерывному диапазону
-        const bool adjacent =
-            previous.end != std::numeric_limits<std::uint64_t>::max() && range.begin == previous.end + 1;
-
-        if (range.begin <= previous.end || adjacent) {
-            previous.end = std::max(previous.end, range.end);
-        } 
-        else {
-            merged.push_back(range);
-        }
+    void writeRegisterOperand(
+        std::ostream& out, 
+        std::uint8_t reg,
+        std::uint32_t value
+    ) {
+        out << " R" 
+            << std::dec 
+            << static_cast<unsigned>(reg)
+            << " (";
+            writeHexValue(out, value);
+            out << ')';
     }
-    return merged;
-}
-
-void writeRegisterOperand(std::ostream& out, std::uint8_t reg, std::uint32_t value) {
-    out << " R" << std::dec << static_cast<unsigned>(reg)
-        << " (0x" << std::hex << std::nouppercase << value << ')';
-}
 
 }
 
@@ -162,15 +205,28 @@ void Emulator::writeDisasmTrace(
         return before.registers[reg];
     };
 
-    // временный поток не изменяет флаги форматирования внешнего потока
-    std::ostringstream out;
-    out << "---- " << std::dec << tick
-        << " 0x" << std::hex << std::nouppercase << address
+    // использую основной поток вывода, но сохраняю его состояние и флаги
+    std::ostream& out = *traceOutput_;
+    StreamStateGuard guard(out);
+
+    out << "---- " 
+        << std::dec 
+        << tick
+        << " 0x" 
+        << std::hex 
+        << std::nouppercase 
+        << address
         << " ----\n";
     // encoding печатается как одно 32-битное слово из восьми hex-цифр
-    out << "0x" << std::hex << std::nouppercase
-        << std::setw(8) << std::setfill('0') << encoding
-        << std::setfill(' ') << ' ' << common::toString(instruction.opcode);
+    out << "0x" 
+        << std::hex 
+        << std::nouppercase
+        << std::setw(8) 
+        << std::setfill('0') 
+        << encoding
+        << std::setfill(' ') 
+        << ' ' 
+        << common::toString(instruction.opcode);
 
     switch (instruction.opcode) {
         case common::Opcode::LI:
@@ -197,7 +253,6 @@ void Emulator::writeDisasmTrace(
     }
 
     out << '\n';
-    *traceOutput_ << out.str();
 }
 
 }

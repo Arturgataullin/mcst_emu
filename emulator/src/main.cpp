@@ -12,6 +12,9 @@ namespace {
 const std::string trace_str = "--trace=";
 const std::string trace_ticks_str = "--trace-ticks=";
 
+// constexpr std::string_view trace_str = "--trace=";
+// constexpr std::string_view trace_ticks_str = "--trace-ticks=";
+
 struct CommandLineOptions {
     std::string inputPath;
     bool traceDisasm = false;
@@ -105,7 +108,7 @@ int main(int argc, char* argv[]) {
 #if MCST_TRACING
         if (options.traceDisasm) {
             // трасса направляется в stdout, чтобы её можно было сохранить в файл
-            emulator.enableDisasmTrace(std::cout, options.traceRanges);
+            emulator.enableDisasmTrace(std::cout, std::move(options.traceRanges));
         }
 #endif
 

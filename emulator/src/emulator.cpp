@@ -217,7 +217,7 @@ void Emulator::execute(const DecodedInstruction& instruction) {
 }
 
 void Emulator::step() {
-    if (isFinished()) {
+    if (isFinished()) { // unlikely
         return;
     }
 
