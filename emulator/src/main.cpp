@@ -107,8 +107,8 @@ int main(int argc, char* argv[]) {
 
 #if MCST_TRACING
         if (options.traceDisasm) {
-            // трасса направляется в stdout, чтобы её можно было сохранить в файл
-            emulator.enableDisasmTrace(std::cout, std::move(options.traceRanges));
+            emulator.setTraceOutput(std::cout);
+            emulator.setTraceRanges(std::move(options.traceRanges));
         }
 #endif
 

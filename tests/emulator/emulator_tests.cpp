@@ -428,7 +428,7 @@ TEST_CASE("emulator writes disassembly trace with post-state destination values"
     std::ostringstream trace;
     emulator::Emulator emulator;
     emulator.loadProgram(program, 16);
-    emulator.enableDisasmTrace(trace);
+    emulator.setTraceOutput(trace);
     emulator.run();
 
     REQUIRE(
@@ -449,7 +449,8 @@ TEST_CASE("trace reads aliased source operands from pre-instruction state") {
     std::ostringstream trace;
     emulator::Emulator emulator;
     emulator.loadProgram(program);
-    emulator.enableDisasmTrace(trace, {{1, 1}});
+    emulator.setTraceOutput(trace);
+    emulator.setTraceRanges({{1, 1}});
     emulator.run();
 
     REQUIRE(
@@ -460,20 +461,15 @@ TEST_CASE("trace reads aliased source operands from pre-instruction state") {
 }
 
 TEST_CASE("trace tick ranges are inclusive and overlapping ranges are merged") {
-    const auto ranges = emulator::parseTickRanges("7-10,0,3-5,4-8");
+    emulator::TickRangeFilter filter;
+    filter.setRanges(emulator::parseTickRanges("7-10,0,3-5,4-8"));
 
-    REQUIRE(ranges.size() == 2);
-    REQUIRE(ranges[0].begin == 0);
-    REQUIRE(ranges[0].end == 0);
-    REQUIRE(ranges[1].begin == 3);
-    REQUIRE(ranges[1].end == 10);
-
-    REQUIRE(emulator::containsTick(ranges, 0));
-    REQUIRE_FALSE(emulator::containsTick(ranges, 1));
-    REQUIRE_FALSE(emulator::containsTick(ranges, 2));
-    REQUIRE(emulator::containsTick(ranges, 3));
-    REQUIRE(emulator::containsTick(ranges, 10));
-    REQUIRE_FALSE(emulator::containsTick(ranges, 11));
+    REQUIRE(filter.contains(0));
+    REQUIRE_FALSE(filter.contains(1));
+    REQUIRE_FALSE(filter.contains(2));
+    REQUIRE(filter.contains(3));
+    REQUIRE(filter.contains(10));
+    REQUIRE_FALSE(filter.contains(11));
 }
 
 TEST_CASE("trace tick range parser rejects malformed ranges") {
@@ -499,7 +495,7 @@ TEST_CASE("saves the parameters of the used stream") {
 
     emulator::Emulator emulator;
     emulator.loadProgram(program);
-    emulator.enableDisasmTrace(trace);
+    emulator.setTraceOutput(trace);
     emulator.run();
 
     REQUIRE(

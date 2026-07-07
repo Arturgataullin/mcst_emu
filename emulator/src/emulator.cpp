@@ -38,6 +38,7 @@ void Emulator::loadProgram(const std::vector<std::uint8_t>& program, std::uint32
 
 #if MCST_TRACING
     tick_ = 0;
+    tickRangeFilter_.reset();
 #endif
 }
 
@@ -230,7 +231,7 @@ void Emulator::step() {
     const std::uint64_t currentTick = tick_;
     const bool emitTrace =
         traceOutput_ != nullptr &&
-        containsTick(traceRanges_, currentTick);
+        tickRangeFilter_.contains(currentTick);
 
     StateSnapshot before{};
     if (emitTrace) {

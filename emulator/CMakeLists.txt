@@ -4,7 +4,7 @@ add_library(emulator_lib
 )
 
 if(TRACING)
-    target_sources(emulator_lib PRIVATE src/trace.cpp)
+    target_sources(emulator_lib PRIVATE src/trace.cpp src/tick_ranges.cpp)
 endif()
 
 target_include_directories(emulator_lib

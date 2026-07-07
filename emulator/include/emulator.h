@@ -16,7 +16,7 @@
 
 #if MCST_TRACING
 #include <iosfwd>
-#include "trace.h"
+#include "tick_ranges.h"
 #endif
 
 namespace emulator {
@@ -45,7 +45,10 @@ public:
     std::string dumpRegisters() const;
 
 #if MCST_TRACING
-    void enableDisasmTrace(std::ostream& output, std::vector<TickRange> ranges = {});
+    // void enableDisasmTrace(std::ostream& output, std::vector<TickRange> ranges = {});
+
+    void setTraceOutput(std::ostream& output);
+    void setTraceRanges(std::vector<TickRange> ranges);
 #endif
 
 private:
@@ -85,7 +88,7 @@ private:
 
 #if MCST_TRACING
     std::ostream* traceOutput_ = nullptr;
-    std::vector<TickRange> traceRanges_;
+    TickRangeFilter tickRangeFilter_;
     std::uint64_t tick_ = 0;
 #endif
 };
