@@ -1,10 +1,12 @@
 add_library(emulator_lib
+    src/command_line.cpp
     src/emulator.cpp
     src/opMemory.cpp
+    src/tick_ranges.cpp
 )
 
 if(TRACING)
-    target_sources(emulator_lib PRIVATE src/trace.cpp src/tick_ranges.cpp)
+    target_sources(emulator_lib PRIVATE src/trace.cpp)
 endif()
 
 target_include_directories(emulator_lib

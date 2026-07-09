@@ -8,6 +8,9 @@
 
 namespace emulator {
 
+Emulator::Emulator(std::size_t memorySize)
+    : memory_(memorySize) {}
+
 std::vector<std::uint8_t> Emulator::readBinaryFile(const std::string& inputPath) {
     std::ifstream in(inputPath, std::ios::binary);
     if (!in) {

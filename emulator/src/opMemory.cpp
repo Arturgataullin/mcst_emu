@@ -6,6 +6,7 @@
 
 namespace emulator {
 
+// снаружи память адресуется байтами, внутри хранится массивом 4-байтовых ячеек
 constexpr std::size_t cellSize = 4;
 constexpr std::size_t cellMask = 3;
 constexpr std::size_t cellShift = 2;
@@ -70,6 +71,7 @@ std::uint8_t Memory::read8(std::uint32_t address) const {
 std::uint16_t Memory::read16(std::uint32_t address) const {
     checkRange(address, 2);
 
+    // многобайтовые операции собираются по байтам, поэтому работают и на невыровненных адресах
     std::uint16_t value = 0;
     value |= static_cast<std::uint16_t>(read8Unchecked(address));
     value |= static_cast<std::uint16_t>(read8Unchecked(address + 1)) << 8;
@@ -119,6 +121,7 @@ void Memory::checkAddress(std::uint32_t address) const {
 }
 
 void Memory::checkRange(std::uint32_t address, std::size_t accessSize) const {
+    // не считаем address + accessSize напрямую, чтобы не получить переполнение
     if (accessSize > size_ || static_cast<std::size_t>(address) > size_ - accessSize) [[unlikely]] {
         throw std::runtime_error("memory range access out of range");
     }

@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "command_line.h"
@@ -11,16 +12,17 @@
 namespace {
 
 void printUsage(std::ostream& out) {
-    out << "usage: emulator [--trace=disasm,ram-rw] [--trace-ticks=a,b-c] [--ram-size=<size>] \\
-    [--warn=uninit-ram] [--trace-ramaddrs=a,b-c] <input.o>\n";
+    out << "usage: emulator [--trace=disasm,ram-wr] [--trace-ticks=a,b-c] "
+           "[--ram-size=<size>] [--warn=uninit-ram] "
+           "[--trace-ram-addrs=a,b-c] <input.o>\n";
 }
 
 }
 
 int main(int argc, char* argv[]) {
-    CommandLineOptions options;
+    emulator::CommandLineOptions options;
     try {
-        options = parseCommandLine(argc, argv);
+        options = emulator::parseCommandLine(argc, argv);
     }
     catch (const std::invalid_argument& error) {
         std::cerr << error.what() << '\n';
@@ -29,19 +31,19 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        emulator::Emulator emulator;
+        emulator::Emulator emulator(options.ramSize);
         emulator.loadProgramFromFile(options.inputPath);
 
 #if MCST_TRACING
-        if (options.traceDisasm) {
+        if (options.trace.disasm) {
             emulator.setTraceOutput(std::cout);
-            emulator.setTraceRanges(std::move(options.traceRanges));
+            emulator.setTraceRanges(std::move(options.trace.tickRanges));
         }
 #endif
 
         emulator.run();
 
-        if (!options.traceDisasm) {
+        if (!options.trace.disasm) {
             std::cout << emulator.dumpRegisters() << '\n';
         }
         return 0;

@@ -31,6 +31,8 @@ struct DecodedInstruction {
 
 class Emulator {
 public:
+    explicit Emulator(std::size_t memorySize = common::opMemorySize);
+
     void loadProgramFromFile(const std::string& inputPath);
     void loadProgram(const std::vector<std::uint8_t>& program,
                      std::uint32_t baseAddress = common::resetAddress);
