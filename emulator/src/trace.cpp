@@ -49,6 +49,17 @@ namespace {
             << value;
     }   
 
+    void writeHexWord(std::ostream& out, std::uint32_t value) {
+        out << "0x"
+            << std::hex
+            << std::nouppercase
+            << std::right
+            << std::setw(8)
+            << std::setfill('0')
+            << value
+            << std::setfill(' ');
+    }
+
     void writeRegisterOperand(
         std::ostream& out, 
         std::uint8_t reg,
@@ -64,12 +75,78 @@ namespace {
 
 }
 
-void Emulator::setTraceOutput(std::ostream& output) {
+void Emulator::enableDisasmTrace(std::ostream& output) {
     traceOutput_ = &output;
 }
 
-void Emulator::setTraceRanges(std::vector<TickRange> ranges) {
+void Emulator::setTraceTicks(std::vector<TickRange> ranges) {
     tickRangeFilter_.setRanges(std::move(ranges));
+}
+
+void Emulator::enableRamWriteTrace(std::ostream& output, std::vector<AddressRange> ranges) {
+    ramWriteTraceOutput_ = &output;
+    ramWriteAddressFilter_.setRanges(std::move(ranges));
+    // одна невыровненная запись может задеть две соседние ячейки
+    pendingRamWriteTrace_.reserve(2);
+    // callback подключается только при включенном ram-wr, чтобы не замедлять обычные записи
+    memory_.setCellWriteHandler([this](
+        std::uint32_t cellAddress,
+        std::uint32_t oldData,
+        std::uint32_t newData
+    ) {
+        // memory сообщает только факт изменения ячейки, а фильтры и формат остаются в Emulator
+        collectRamWriteTrace(cellAddress, oldData, newData);
+    });
+}
+
+void Emulator::collectRamWriteTrace(
+    std::uint32_t cellAddress,
+    std::uint32_t oldData,
+    std::uint32_t newData
+) {
+    if (ramWriteTraceOutput_ == nullptr) {
+        return;
+    }
+
+    // фильтры применяются при сборе события, чтобы не хранить лишние записи
+    if (!tickRangeFilter_.contains(tick_) || !ramWriteAddressFilter_.contains(cellAddress)) {
+        return;
+    }
+
+    pendingRamWriteTrace_.push_back({
+        tick_,
+        cellAddress,
+        oldData,
+        newData
+    });
+}
+
+void Emulator::writeRamWriteTrace(const RamWriteTraceEvent& event) const {
+    std::ostream& out = *ramWriteTraceOutput_;
+    StreamStateGuard guard(out);
+
+    out << std::dec
+        << event.tick
+        << " RAM [";
+    writeHexWord(out, event.cellAddress);
+    out << "] wr ";
+    writeHexWord(out, event.oldData);
+    out << " -> ";
+    writeHexWord(out, event.newData);
+    out << '\n';
+}
+
+void Emulator::flushRamWriteTrace() {
+    if (ramWriteTraceOutput_ == nullptr) {
+        pendingRamWriteTrace_.clear();
+        return;
+    }
+
+    // порядок событий совпадает с порядком уведомлений от Memory
+    for (const RamWriteTraceEvent& event : pendingRamWriteTrace_) {
+        writeRamWriteTrace(event);
+    }
+    pendingRamWriteTrace_.clear();
 }
 
 void Emulator::writeDisasmTrace(

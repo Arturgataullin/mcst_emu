@@ -2,7 +2,7 @@ add_library(emulator_lib
     src/command_line.cpp
     src/emulator.cpp
     src/opMemory.cpp
-    src/tick_ranges.cpp
+    src/ranges.cpp
 )
 
 if(TRACING)

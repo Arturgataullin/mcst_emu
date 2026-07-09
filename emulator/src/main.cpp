@@ -35,15 +35,20 @@ int main(int argc, char* argv[]) {
         emulator.loadProgramFromFile(options.inputPath);
 
 #if MCST_TRACING
+        if (options.trace.disasm || options.trace.ramWrites) {
+            emulator.setTraceTicks(std::move(options.trace.tickRanges));
+        }
         if (options.trace.disasm) {
-            emulator.setTraceOutput(std::cout);
-            emulator.setTraceRanges(std::move(options.trace.tickRanges));
+            emulator.enableDisasmTrace(std::cout);
+        }
+        if (options.trace.ramWrites) {
+            emulator.enableRamWriteTrace(std::cout, std::move(options.trace.ramAddressRanges));
         }
 #endif
 
         emulator.run();
 
-        if (!options.trace.disasm) {
+        if (!options.trace.disasm && !options.trace.ramWrites) {
             std::cout << emulator.dumpRegisters() << '\n';
         }
         return 0;

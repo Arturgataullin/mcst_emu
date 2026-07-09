@@ -16,7 +16,7 @@
 
 #if MCST_TRACING
 #include <iosfwd>
-#include "tick_ranges.h"
+#include "ranges.h"
 #endif
 
 namespace emulator {
@@ -49,8 +49,9 @@ public:
 #if MCST_TRACING
     // void enableDisasmTrace(std::ostream& output, std::vector<TickRange> ranges = {});
 
-    void setTraceOutput(std::ostream& output);
-    void setTraceRanges(std::vector<TickRange> ranges);
+    void enableDisasmTrace(std::ostream& output);
+    void setTraceTicks(std::vector<TickRange> ranges);
+    void enableRamWriteTrace(std::ostream& output, std::vector<AddressRange> ranges = {});
 #endif
 
 private:
@@ -77,6 +78,17 @@ private:
         const DecodedInstruction& instruction,
         const StateSnapshot& before
     ) const;
+
+    struct RamWriteTraceEvent {
+        std::uint64_t tick = 0;
+        std::uint32_t cellAddress = 0;
+        std::uint32_t oldData = 0;
+        std::uint32_t newData = 0;
+    };
+
+    void collectRamWriteTrace(std::uint32_t cellAddress, std::uint32_t oldData, std::uint32_t newData);
+    void writeRamWriteTrace(const RamWriteTraceEvent& event) const;
+    void flushRamWriteTrace();
 #endif
 
 private:
@@ -91,6 +103,10 @@ private:
 #if MCST_TRACING
     std::ostream* traceOutput_ = nullptr;
     TickRangeFilter tickRangeFilter_;
+    std::ostream* ramWriteTraceOutput_ = nullptr;
+    AddressRangeFilter ramWriteAddressFilter_;
+    // события RAM write копятся во время execute(), а печатаются после завершения инструкции
+    std::vector<RamWriteTraceEvent> pendingRamWriteTrace_;
     std::uint64_t tick_ = 0;
 #endif
 };

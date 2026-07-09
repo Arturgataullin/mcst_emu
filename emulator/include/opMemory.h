@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 #include "isa.h"
@@ -10,6 +11,13 @@ namespace emulator {
 
 class Memory {
 public:
+    // обработчик нужен для трассировки изменения 4-байтовых ячеек памяти
+    using CellWriteHandler = std::function<void(
+        std::uint32_t cellAddress,
+        std::uint32_t oldData,
+        std::uint32_t newData
+    )>;
+
     explicit Memory(std::size_t size = common::opMemorySize);
 
     void clear() noexcept;
@@ -25,11 +33,21 @@ public:
     void write32(std::uint32_t address, std::uint32_t value);
 
     std::size_t size() const noexcept;
+    void setCellWriteHandler(CellWriteHandler handler);
 
 private:
     // функции без проверки доступности памти по адресу для использования в write/read16,32
     std::uint8_t read8Unchecked(std::uint32_t address) const;
     void write8Unchecked(std::uint32_t address, std::uint8_t value);
+
+    void writeUnchecked(std::uint32_t address, std::uint32_t value, std::size_t byteCount);
+    // уведомляет только о финальном изменении ячейки, а не о каждом записанном байте
+    void notifyCellWrites(
+        std::size_t firstCellIndex,
+        std::uint32_t firstOldData,
+        std::size_t lastCellIndex,
+        std::uint32_t lastOldData
+    );
 
     void checkAddress(std::uint32_t address) const;
     void checkRange(std::uint32_t address, std::size_t size) const;
@@ -37,6 +55,7 @@ private:
 private:
     std::vector<std::uint32_t> cells_;
     std::size_t size_;
+    CellWriteHandler cellWriteHandler_;
 };
 
 }

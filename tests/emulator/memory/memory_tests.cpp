@@ -8,6 +8,16 @@
 
 using Catch::Matchers::ContainsSubstring;
 
+namespace {
+
+struct CellWriteEvent {
+    std::uint32_t address = 0;
+    std::uint32_t oldData = 0;
+    std::uint32_t newData = 0;
+};
+
+}
+
 // weak test
 TEST_CASE("memory is zeroed after clear") {
     emulator::Memory memory;
@@ -120,6 +130,47 @@ TEST_CASE("memory write32 stores word in little-endian order and supports unalig
     REQUIRE(memory.read8(3) == 0x22);
     REQUIRE(memory.read8(4) == 0x11);
     REQUIRE(memory.read32(1) == 0x11223344);
+}
+
+TEST_CASE("memory reports cell write events once per affected cell") {
+    emulator::Memory memory;
+    std::vector<CellWriteEvent> events;
+
+    memory.setCellWriteHandler([&events](
+        std::uint32_t address,
+        std::uint32_t oldData,
+        std::uint32_t newData
+    ) {
+        events.push_back({address, oldData, newData});
+    });
+
+    memory.write32(1, 0x11223344);
+
+    REQUIRE(events.size() == 2);
+    REQUIRE(events[0].address == 0);
+    REQUIRE(events[0].oldData == 0x00000000);
+    REQUIRE(events[0].newData == 0x22334400);
+    REQUIRE(events[1].address == 4);
+    REQUIRE(events[1].oldData == 0x00000000);
+    REQUIRE(events[1].newData == 0x00000011);
+}
+
+TEST_CASE("memory load does not report cell write events") {
+    emulator::Memory memory;
+    std::vector<CellWriteEvent> events;
+
+    memory.setCellWriteHandler([&events](
+        std::uint32_t address,
+        std::uint32_t oldData,
+        std::uint32_t newData
+    ) {
+        events.push_back({address, oldData, newData});
+    });
+
+    memory.load({0x11, 0x22, 0x33, 0x44}, 0);
+
+    REQUIRE(events.empty());
+    REQUIRE(memory.read32(0) == 0x44332211);
 }
 
 TEST_CASE("memory load does not affect bytes outside loaded range") {

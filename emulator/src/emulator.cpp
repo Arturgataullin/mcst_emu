@@ -232,12 +232,17 @@ void Emulator::step() {
 #if MCST_TRACING
     // номер такта равен числу команд, исполненных перед текущей командой
     const std::uint64_t currentTick = tick_;
-    const bool emitTrace =
+    const bool emitRamWriteTrace = ramWriteTraceOutput_ != nullptr;
+    if (emitRamWriteTrace) {
+        // на каждом шаге буфер должен содержать только записи текущей инструкции
+        pendingRamWriteTrace_.clear();
+    }
+    const bool emitDisasmTrace =
         traceOutput_ != nullptr &&
         tickRangeFilter_.contains(currentTick);
 
     StateSnapshot before{};
-    if (emitTrace) {
+    if (emitDisasmTrace) {
         // источники должны выводиться со значениями до исполнения команды
         before.registers = registers_;
         before.tempRegister = assemblerTempRegister_;
@@ -249,7 +254,7 @@ void Emulator::step() {
 #if MCST_TRACING
     // счётчик увеличивается только после успешного исполнения команды
     ++tick_;
-    if (emitTrace) {
+    if (emitDisasmTrace) {
         writeDisasmTrace(
             currentTick,
             instructionAddress - programBase_,
@@ -257,6 +262,10 @@ void Emulator::step() {
             instruction,
             before
         );
+    }
+    if (emitRamWriteTrace) {
+        // RAM trace печатается после execute(), когда известны все изменения ячеек
+        flushRamWriteTrace();
     }
 #endif
 }

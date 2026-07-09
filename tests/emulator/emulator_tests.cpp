@@ -428,7 +428,7 @@ TEST_CASE("emulator writes disassembly trace with post-state destination values"
     std::ostringstream trace;
     emulator::Emulator emulator;
     emulator.loadProgram(program, 16);
-    emulator.setTraceOutput(trace);
+    emulator.enableDisasmTrace(trace);
     emulator.run();
 
     REQUIRE(
@@ -449,8 +449,8 @@ TEST_CASE("trace reads aliased source operands from pre-instruction state") {
     std::ostringstream trace;
     emulator::Emulator emulator;
     emulator.loadProgram(program);
-    emulator.setTraceOutput(trace);
-    emulator.setTraceRanges({{1, 1}});
+    emulator.enableDisasmTrace(trace);
+    emulator.setTraceTicks({{1, 1}});
     emulator.run();
 
     REQUIRE(
@@ -495,7 +495,7 @@ TEST_CASE("saves the parameters of the used stream") {
 
     emulator::Emulator emulator;
     emulator.loadProgram(program);
-    emulator.setTraceOutput(trace);
+    emulator.enableDisasmTrace(trace);
     emulator.run();
 
     REQUIRE(

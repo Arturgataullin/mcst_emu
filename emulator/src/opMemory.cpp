@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 namespace emulator {
 
@@ -41,7 +42,8 @@ void Memory::load(const std::vector<std::uint8_t>& bytes, std::uint32_t baseAddr
     checkRange(baseAddress, bytes.size());
 
     for (std::size_t i = 0; i < bytes.size(); ++i) {
-        write8(baseAddress + static_cast<std::uint32_t>(i), bytes[i]);
+        // загрузка программы не является исполненной командой записи в RAM
+        write8Unchecked(baseAddress + static_cast<std::uint32_t>(i), bytes[i]);
     }
 }
 
@@ -54,13 +56,48 @@ std::uint8_t Memory::read8Unchecked(std::uint32_t address) const {
 }
 
 void Memory::write8Unchecked(std::uint32_t address, std::uint8_t value) {
-    const std::size_t cellIndex = address / cellSize;
+    const std::size_t cellIndex = address >> cellShift;
     const std::size_t byteIndex = address & cellMask;
     const std::size_t shift = byteIndex * 8;
     const std::uint32_t mask = byteMask << shift; // с помощью этой маски обнуляю байт, который нужно заменить
 
     cells_[cellIndex] = (cells_[cellIndex] & ~mask) |
                         (static_cast<std::uint32_t>(value) << shift);
+}
+
+void Memory::writeUnchecked(std::uint32_t address, std::uint32_t value, std::size_t byteCount) {
+    for (std::size_t i = 0; i < byteCount; ++i) {
+        // младший байт значения попадает в меньший адрес
+        const std::uint8_t byteValue =
+            static_cast<std::uint8_t>((value >> (i * 8)) & byteMask);
+        write8Unchecked(address + static_cast<std::uint32_t>(i), byteValue);
+    }
+}
+
+void Memory::notifyCellWrites(
+    std::size_t firstCellIndex,
+    std::uint32_t firstOldData,
+    std::size_t lastCellIndex,
+    std::uint32_t lastOldData
+) {
+    if (!cellWriteHandler_) {
+        return;
+    }
+
+    // одна операция записи может задеть максимум две 4-байтовые ячейки
+    cellWriteHandler_(
+        static_cast<std::uint32_t>(firstCellIndex * cellSize),
+        firstOldData,
+        cells_[firstCellIndex]
+    );
+
+    if (lastCellIndex != firstCellIndex) {
+        cellWriteHandler_(
+            static_cast<std::uint32_t>(lastCellIndex * cellSize),
+            lastOldData,
+            cells_[lastCellIndex]
+        );
+    }
 }
 
 std::uint8_t Memory::read8(std::uint32_t address) const {
@@ -92,28 +129,47 @@ std::uint32_t Memory::read32(std::uint32_t address) const {
 // запись 0xAB по адресу 0x0
 // как выглядит ячейка (4 байта): 0x000000AB
 void Memory::write8(std::uint32_t address, std::uint8_t value) {
-    checkAddress(address);
-    write8Unchecked(address, value);
+    checkRange(address, 1);
+
+    const std::size_t cellIndex = address >> cellShift;
+    const std::uint32_t oldData = cells_[cellIndex];
+
+    writeUnchecked(address, value, 1);
+    notifyCellWrites(cellIndex, oldData, cellIndex, oldData);
 }
 
 void Memory::write16(std::uint32_t address, std::uint16_t value) {
     checkRange(address, 2);
 
-    write8Unchecked(address, static_cast<std::uint8_t>(value & byteMask));
-    write8Unchecked(address + 1, static_cast<std::uint8_t>((value >> 8) & byteMask));
+    // сохраняю старые значения до записи, чтобы trace видел old -> new
+    const std::size_t firstCellIndex = address >> cellShift;
+    const std::size_t lastCellIndex = (static_cast<std::size_t>(address) + 1) >> cellShift;
+    const std::uint32_t firstOldData = cells_[firstCellIndex];
+    const std::uint32_t lastOldData = cells_[lastCellIndex];
+
+    writeUnchecked(address, value, 2);
+    notifyCellWrites(firstCellIndex, firstOldData, lastCellIndex, lastOldData);
 }
 
 void Memory::write32(std::uint32_t address, std::uint32_t value) {
     checkRange(address, 4);
 
-    write8Unchecked(address, static_cast<std::uint8_t>(value & byteMask));
-    write8Unchecked(address + 1, static_cast<std::uint8_t>((value >> 8) & byteMask));
-    write8Unchecked(address + 2, static_cast<std::uint8_t>((value >> 16) & byteMask));
-    write8Unchecked(address + 3, static_cast<std::uint8_t>((value >> 24) & byteMask));
+    const std::size_t firstCellIndex = address >> cellShift;
+    const std::size_t lastCellIndex = (static_cast<std::size_t>(address) + 3) >> cellShift;
+    const std::uint32_t firstOldData = cells_[firstCellIndex];
+    const std::uint32_t lastOldData = cells_[lastCellIndex];
+
+    writeUnchecked(address, value, 4);
+    notifyCellWrites(firstCellIndex, firstOldData, lastCellIndex, lastOldData);
 }
 
 std::size_t Memory::size() const noexcept {
     return size_;
+}
+
+void Memory::setCellWriteHandler(CellWriteHandler handler) {
+    // пустой handler отключает уведомления о записи
+    cellWriteHandler_ = std::move(handler);
 }
 
 void Memory::checkAddress(std::uint32_t address) const {
