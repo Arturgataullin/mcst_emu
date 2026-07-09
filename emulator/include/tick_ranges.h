@@ -8,19 +8,23 @@
 namespace emulator {
 
 // границы диапазона включаются в трассировку
-struct TickRange {
-    std::uint64_t begin = 0;
-    std::uint64_t end = 0;
+template <typename T>
+struct Range {
+    T begin = 0;
+    T end = 0;
 };
 
-class TickRangeFilter {
+using TickRange = Range<std::uint64_t>;
+using AddressRange = Range<std::uint32_t>;
+
+template <typename T>
+class RangeFilter {
 public:
     void setRanges(std::vector<TickRange> ranges);
-    bool contains(std::uint64_t tick) noexcept;
+    bool contains(T elem) noexcept;
     void reset() noexcept;
 private:
-    std::vector<TickRange> ranges_;
-    std::size_t currentRange_ = 0;
+    std::vector<Range> ranges_;
 };
 
 std::vector<TickRange> parseTickRanges(std::string_view text);

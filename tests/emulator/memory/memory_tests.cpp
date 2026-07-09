@@ -20,6 +20,29 @@ TEST_CASE("memory is zeroed after clear") {
     REQUIRE(memory.read8(common::opMemorySize - 1) == 0x00);
 }
 
+TEST_CASE("memory has configurable byte size") {
+    emulator::Memory memory(16);
+
+    REQUIRE(memory.size() == 16);
+    REQUIRE(memory.read8(15) == 0x00);
+    REQUIRE_THROWS_WITH(
+        memory.read8(16),
+        ContainsSubstring("out of range")
+    );
+}
+
+TEST_CASE("memory rejects invalid sizes") {
+    REQUIRE_THROWS_WITH(
+        emulator::Memory(0),
+        ContainsSubstring("positive")
+    );
+
+    REQUIRE_THROWS_WITH(
+        emulator::Memory(3),
+        ContainsSubstring("multiple of 4")
+    );
+}
+
 TEST_CASE("memory load stores bytes at base address") {
     emulator::Memory memory;
     memory.clear();
@@ -75,6 +98,30 @@ TEST_CASE("memory write8 overwrites byte") {
     REQUIRE(memory.read8(42) == 0xAB);
 }
 
+TEST_CASE("memory write16 stores halfword in little-endian order") {
+    emulator::Memory memory;
+    memory.clear();
+
+    memory.write16(3, 0xABCD);
+
+    REQUIRE(memory.read8(3) == 0xCD);
+    REQUIRE(memory.read8(4) == 0xAB);
+    REQUIRE(memory.read16(3) == 0xABCD);
+}
+
+TEST_CASE("memory write32 stores word in little-endian order and supports unaligned access") {
+    emulator::Memory memory;
+    memory.clear();
+
+    memory.write32(1, 0x11223344);
+
+    REQUIRE(memory.read8(1) == 0x44);
+    REQUIRE(memory.read8(2) == 0x33);
+    REQUIRE(memory.read8(3) == 0x22);
+    REQUIRE(memory.read8(4) == 0x11);
+    REQUIRE(memory.read32(1) == 0x11223344);
+}
+
 TEST_CASE("memory load does not affect bytes outside loaded range") {
     emulator::Memory memory;
     memory.clear();
@@ -120,6 +167,19 @@ TEST_CASE("memory throws on read32 when range exceeds memory size") {
         memory.read32(common::opMemorySize - 2),
         ContainsSubstring("out of range")
     );
+}
+
+TEST_CASE("memory throws on write32 when range exceeds memory size without partial write") {
+    emulator::Memory memory(4);
+
+    memory.write32(0, 0x11223344);
+
+    REQUIRE_THROWS_WITH(
+        memory.write32(2, 0xAABBCCDD),
+        ContainsSubstring("out of range")
+    );
+
+    REQUIRE(memory.read32(0) == 0x11223344);
 }
 
 TEST_CASE("memory throws when load exceeds memory size") {
