@@ -115,6 +115,7 @@ std::uint32_t sra_without_cast(std::uint32_t val, std::uint32_t shift) {
 } 
 
 std::uint32_t sign_extend_byte(std::uint32_t value) {
+    // sxt для байта смотрит только на младшие 8 бит исходного регистра
     value &= 0x000000FFu;
     if ((value & 0x00000080u) == 0) {
         return value;
@@ -123,6 +124,7 @@ std::uint32_t sign_extend_byte(std::uint32_t value) {
 }
 
 std::uint32_t sign_extend_halfword(std::uint32_t value) {
+    // sxt для полуслова смотрит на бит 15 и заполняет старшие 16 бит этим знаком
     value &= 0x0000FFFFu;
     if ((value & 0x00008000u) == 0) {
         return value;
@@ -131,6 +133,7 @@ std::uint32_t sign_extend_halfword(std::uint32_t value) {
 }
 
 std::uint32_t sign_extend(std::uint32_t value, std::uint8_t mode) {
+    // по заданию остальные режимы sxt игнорируются и оставляют значение без изменений
     switch (mode) {
         case 0:
             return sign_extend_byte(value);
@@ -142,6 +145,7 @@ std::uint32_t sign_extend(std::uint32_t value, std::uint8_t mode) {
 }
 
 std::uint32_t byte_swap_halfword(std::uint32_t value) {
+    // режим 1 меняет местами только два младших байта, старшие 16 бит сохраняются
     return (value & 0xFFFF0000u) |
            ((value & 0x000000FFu) << 8) |
            ((value & 0x0000FF00u) >> 8);
@@ -155,6 +159,7 @@ std::uint32_t byte_swap_word(std::uint32_t value) {
 }
 
 std::uint32_t byte_swap(std::uint32_t value, std::uint8_t mode) {
+    // по заданию остальные режимы bswap игнорируются и оставляют значение без изменений
     switch (mode) {
         case 1:
             return byte_swap_halfword(value);
@@ -277,6 +282,7 @@ void Emulator::execute(const DecodedInstruction& instruction) {
             validateRegisterIndex(instruction.a, "destination");
             validateRegisterIndex(instruction.b, "base address");
 
+            // в формате opcode a b i поле c хранит imm8, поэтому адрес считается как r[b] + c
             const std::uint32_t address = readRegister(instruction.b) + instruction.c;
             std::uint32_t result = 0;
 
@@ -305,6 +311,7 @@ void Emulator::execute(const DecodedInstruction& instruction) {
             validateRegisterIndex(instruction.a, "source");
             validateRegisterIndex(instruction.b, "base address");
 
+            // store берёт данные из r[a], а r[b] используется только как база адреса
             const std::uint32_t value = readRegister(instruction.a);
             const std::uint32_t address = readRegister(instruction.b) + instruction.c;
 
@@ -331,6 +338,7 @@ void Emulator::execute(const DecodedInstruction& instruction) {
             validateRegisterIndex(instruction.a, "destination");
             validateRegisterIndex(instruction.b, "source");
 
+            // sxt и bswap не обращаются к памяти: поле c здесь задаёт режим операции
             const std::uint32_t source = readRegister(instruction.b);
             std::uint32_t result = 0;
 

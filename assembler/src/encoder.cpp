@@ -96,6 +96,7 @@ std::uint32_t Encoder::encodeInstruction(const Instruction& instruction) const {
         case common::Operation::STW:
         case common::Operation::SXT:
         case common::Operation::BSWAP: {
+            // третий операнд кодируется в последний байт инструкции, а не в 16-битный immediate
             if (instruction.operands.size() != 3) {
                 fail(instruction.location, std::string(common::toString(instruction.operation)) + " expects 3 operands");
             }
@@ -146,6 +147,7 @@ std::uint8_t Encoder::requireImmediate8(const Operand& operand, const SourceLoca
         fail(location, std::string(operandName) + " must be an immediate");
     }
 
+    // для формата opcode a b i значение i должно полностью помещаться в один байт
     const auto value = std::get<ImmediateOperand>(operand).value;
     if (value > common::immediate8Max) {
         fail(location, std::string(operandName) + " must fit into 8 bits");

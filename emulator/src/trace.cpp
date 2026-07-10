@@ -210,6 +210,7 @@ void Emulator::writeDisasmTrace(
             writeRegisterOperand(out, instruction.c, readBefore(instruction.c));
             break;
 
+        // для формата opcode a b i поле c печатается как imm8, а не как регистр
         case common::Opcode::LDB:
         case common::Opcode::LDH:
         case common::Opcode::LDW:

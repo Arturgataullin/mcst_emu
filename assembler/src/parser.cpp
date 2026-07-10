@@ -245,6 +245,7 @@ Instruction Parser::parseInstruction() {
             instruction.operands.push_back(parseRegisterOperand());
             instruction.operands.push_back(parseRegisterOperand());
             break;
+        // новые команды используют формат opcode a b i: два регистра и 8-битный immediate
         case common::Operation::LDB:
         case common::Operation::LDH:
         case common::Operation::LDW:
