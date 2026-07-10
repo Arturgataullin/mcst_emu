@@ -146,6 +146,23 @@ Instruction makeSdiv(std::uint8_t rd, std::uint8_t rs, std::uint8_t rt, std::siz
     return inst;
 }
 
+Instruction makeRegisterImmediate(
+    common::Operation operation,
+    std::uint8_t ra,
+    std::uint8_t rb,
+    std::uint32_t imm,
+    std::size_t line = 1,
+    std::size_t column = 1
+) {
+    Instruction inst;
+    inst.operation = operation;
+    inst.location = SourceLocation{line, column};
+    inst.operands.push_back(RegisterOperand{ra});
+    inst.operands.push_back(RegisterOperand{rb});
+    inst.operands.push_back(ImmediateOperand{imm});
+    return inst;
+}
+
 }
 
 TEST_CASE("encoder encodes single LI instruction") {
@@ -344,6 +361,34 @@ TEST_CASE("encoder encodes single SDIV instruction") {
     REQUIRE(bytes[3] == 0x03);
 }
 
+TEST_CASE("encoder encodes memory-format instructions") {
+    Program program;
+    program.instructions.push_back(makeRegisterImmediate(common::Operation::LDB, 1, 2, 0x80));
+    program.instructions.push_back(makeRegisterImmediate(common::Operation::LDH, 2, 3, 0x81));
+    program.instructions.push_back(makeRegisterImmediate(common::Operation::LDW, 3, 4, 0x82));
+    program.instructions.push_back(makeRegisterImmediate(common::Operation::STB, 4, 5, 0x83));
+    program.instructions.push_back(makeRegisterImmediate(common::Operation::STH, 5, 6, 0x84));
+    program.instructions.push_back(makeRegisterImmediate(common::Operation::STW, 6, 7, 0x85));
+    program.instructions.push_back(makeRegisterImmediate(common::Operation::SXT, 7, 8, 0x86));
+    program.instructions.push_back(makeRegisterImmediate(common::Operation::BSWAP, 8, 9, 0x87));
+
+    Encoder encoder;
+    const auto bytes = encoder.encode(program);
+
+    const std::vector<std::uint8_t> expected = {
+        0x10, 0x01, 0x02, 0x80,
+        0x11, 0x02, 0x03, 0x81,
+        0x12, 0x03, 0x04, 0x82,
+        0x13, 0x04, 0x05, 0x83,
+        0x14, 0x05, 0x06, 0x84,
+        0x15, 0x06, 0x07, 0x85,
+        0x16, 0x07, 0x08, 0x86,
+        0x17, 0x08, 0x09, 0x87
+    };
+
+    REQUIRE(bytes == expected);
+}
+
 TEST_CASE("encoder encodes full sample program") {
     Program program;
     program.instructions.push_back(makeLi(0, 0x0001));
@@ -538,6 +583,18 @@ TEST_CASE("encoder rejects immediate larger than 16 bits") {
     REQUIRE_THROWS_WITH(
         encoder.encode(program),
         ContainsSubstring("immediate must fit into 16 bits")
+    );
+}
+
+TEST_CASE("encoder rejects memory-format instruction with immediate larger than 8 bits") {
+    Program program;
+    program.instructions.push_back(makeRegisterImmediate(common::Operation::LDW, 1, 2, 0x100));
+
+    Encoder encoder;
+
+    REQUIRE_THROWS_WITH(
+        encoder.encode(program),
+        ContainsSubstring("immediate must fit into 8 bits")
     );
 }
 

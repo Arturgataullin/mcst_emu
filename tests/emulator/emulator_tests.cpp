@@ -298,6 +298,58 @@ TEST_CASE("emulator executes unsigned and signed division") {
     REQUIRE(regs[7] == 0x80000000u);
 }
 
+TEST_CASE("emulator executes memory load and store instructions") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x40, 0x00, // LI R0 64
+        0x00, 0x01, 0x44, 0x33, // LI R1 0x3344
+        0x01, 0x01, 0x22, 0x11, // LUI R1 0x1122
+        0x15, 0x01, 0x00, 0x01, // STW R1 R0 1
+        0x10, 0x02, 0x00, 0x01, // LDB R2 R0 1
+        0x11, 0x03, 0x00, 0x02, // LDH R3 R0 2
+        0x12, 0x04, 0x00, 0x01, // LDW R4 R0 1
+        0x00, 0x05, 0xCD, 0xAB, // LI R5 0xABCD
+        0x13, 0x05, 0x00, 0x05, // STB R5 R0 5
+        0x14, 0x05, 0x00, 0x06, // STH R5 R0 6
+        0x12, 0x06, 0x00, 0x05  // LDW R6 R0 5
+    };
+
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.run();
+
+    const auto& regs = emulator.registers();
+    REQUIRE(regs[2] == 0x00000044u);
+    REQUIRE(regs[3] == 0x00002233u);
+    REQUIRE(regs[4] == 0x11223344u);
+    REQUIRE(regs[6] == 0x00ABCDCDu);
+}
+
+TEST_CASE("emulator executes SXT and BSWAP instructions") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x01, 0xDD, 0xCC, // LI R1 0xCCDD
+        0x01, 0x01, 0xBB, 0xAA, // LUI R1 0xAABB
+        0x16, 0x02, 0x01, 0x00, // SXT R2 R1 0
+        0x16, 0x03, 0x01, 0x01, // SXT R3 R1 1
+        0x16, 0x04, 0x01, 0x02, // SXT R4 R1 2
+        0x17, 0x05, 0x01, 0x01, // BSWAP R5 R1 1
+        0x17, 0x06, 0x01, 0x02, // BSWAP R6 R1 2
+        0x17, 0x07, 0x01, 0x00  // BSWAP R7 R1 0
+    };
+
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.run();
+
+    const auto& regs = emulator.registers();
+    REQUIRE(regs[1] == 0xAABBCCDDu);
+    REQUIRE(regs[2] == 0xFFFFFFDDu);
+    REQUIRE(regs[3] == 0xFFFFCCDDu);
+    REQUIRE(regs[4] == 0xAABBCCDDu);
+    REQUIRE(regs[5] == 0xAABBDDCCu);
+    REQUIRE(regs[6] == 0xDDCCBBAAu);
+    REQUIRE(regs[7] == 0xAABBCCDDu);
+}
+
 TEST_CASE("emulator rejects division by zero") {
     SECTION("unsigned division") {
         const std::vector<std::uint8_t> program = {
@@ -414,6 +466,62 @@ TEST_CASE("emulator validates every register field in RRR instruction") {
             emulator.run(),
             ContainsSubstring("invalid register index in right source")
         );
+    }
+}
+
+TEST_CASE("emulator validates register fields in memory-format instructions") {
+    SECTION("load destination register") {
+        const std::vector<std::uint8_t> program = {
+            0x10, 0x10, 0x00, 0x00 // LDB R16 R0 0
+        };
+
+        emulator::Emulator emulator;
+        emulator.loadProgram(program);
+
+        REQUIRE_THROWS_WITH(
+            emulator.run(),
+            ContainsSubstring("invalid register index in destination")
+        );
+    }
+
+    SECTION("load base register") {
+        const std::vector<std::uint8_t> program = {
+            0x10, 0x00, 0x10, 0x00 // LDB R0 R16 0
+        };
+
+        emulator::Emulator emulator;
+        emulator.loadProgram(program);
+
+        REQUIRE_THROWS_WITH(
+            emulator.run(),
+            ContainsSubstring("invalid register index in base address")
+        );
+    }
+
+    SECTION("store source register") {
+        const std::vector<std::uint8_t> program = {
+            0x15, 0x10, 0x00, 0x00 // STW R16 R0 0
+        };
+
+        emulator::Emulator emulator;
+        emulator.loadProgram(program);
+
+        REQUIRE_THROWS_WITH(
+            emulator.run(),
+            ContainsSubstring("invalid register index in source")
+        );
+    }
+
+    SECTION("immediate byte is not a register field") {
+        const std::vector<std::uint8_t> program = {
+            0x00, 0x00, 0x40, 0x00, // LI R0 64
+            0x10, 0x01, 0x00, 0xFF  // LDB R1 R0 0xFF
+        };
+
+        emulator::Emulator emulator;
+        emulator.loadProgram(program);
+
+        REQUIRE_NOTHROW(emulator.run());
     }
 }
 

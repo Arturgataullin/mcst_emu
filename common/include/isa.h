@@ -19,6 +19,7 @@ namespace common {
     inline constexpr std::size_t opMemorySize = 1024; // for 32 instructions of 4 bytes each
     inline constexpr std::uint32_t resetAddress = 0;
     
+    inline constexpr uint64_t immediate8Max = 0xFF;
     inline constexpr uint64_t immediate16Max = 0xFFFF;
     inline constexpr uint64_t immediate32Max = 0xFFFFFFFF;
     inline constexpr size_t instructionSizeBytes = 4;
@@ -40,6 +41,14 @@ namespace common {
         MUL,
         UDIV,
         SDIV,
+        LDB,
+        LDH,
+        LDW,
+        STB,
+        STH,
+        STW,
+        SXT,
+        BSWAP,
         // pseudo commands
         MOV,
         NEG,
@@ -60,7 +69,15 @@ namespace common {
         SRA = 0x09,
         MUL = 0x0A,
         UDIV = 0x0B,
-        SDIV = 0x0C
+        SDIV = 0x0C,
+        LDB = 0x10,
+        LDH = 0x11,
+        LDW = 0x12,
+        STB = 0x13,
+        STH = 0x14,
+        STW = 0x15,
+        SXT = 0x16,
+        BSWAP = 0x17
     };
 
     std::optional<Operation> operationFromString(std::string_view lexeme);

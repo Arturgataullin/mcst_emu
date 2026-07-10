@@ -96,6 +96,8 @@ void Emulator::writeRegister(std::uint8_t reg, std::uint32_t value) {
     registers_[reg] = value;
 }
 
+namespace {
+
 // реализация сдвига без преобразования
 std::uint32_t sra_without_cast(std::uint32_t val, std::uint32_t shift) {
     shift &= 0x1F;
@@ -111,6 +113,59 @@ std::uint32_t sra_without_cast(std::uint32_t val, std::uint32_t shift) {
     const std::uint32_t mask = ~std::uint32_t{0} << (common::registerSize - shift);
     return shifted | mask;
 } 
+
+std::uint32_t sign_extend_byte(std::uint32_t value) {
+    value &= 0x000000FFu;
+    if ((value & 0x00000080u) == 0) {
+        return value;
+    }
+    return value | 0xFFFFFF00u;
+}
+
+std::uint32_t sign_extend_halfword(std::uint32_t value) {
+    value &= 0x0000FFFFu;
+    if ((value & 0x00008000u) == 0) {
+        return value;
+    }
+    return value | 0xFFFF0000u;
+}
+
+std::uint32_t sign_extend(std::uint32_t value, std::uint8_t mode) {
+    switch (mode) {
+        case 0:
+            return sign_extend_byte(value);
+        case 1:
+            return sign_extend_halfword(value);
+        default:
+            return value;
+    }
+}
+
+std::uint32_t byte_swap_halfword(std::uint32_t value) {
+    return (value & 0xFFFF0000u) |
+           ((value & 0x000000FFu) << 8) |
+           ((value & 0x0000FF00u) >> 8);
+}
+
+std::uint32_t byte_swap_word(std::uint32_t value) {
+    return ((value & 0x000000FFu) << 24) |
+           ((value & 0x0000FF00u) << 8) |
+           ((value & 0x00FF0000u) >> 8) |
+           ((value & 0xFF000000u) >> 24);
+}
+
+std::uint32_t byte_swap(std::uint32_t value, std::uint8_t mode) {
+    switch (mode) {
+        case 1:
+            return byte_swap_halfword(value);
+        case 2:
+            return byte_swap_word(value);
+        default:
+            return value;
+    }
+}
+
+}
 
 void Emulator::execute(const DecodedInstruction& instruction) {
     auto advancePc = [this]() {
@@ -215,13 +270,92 @@ void Emulator::execute(const DecodedInstruction& instruction) {
             advancePc();
             return;
         }
+
+        case common::Opcode::LDB:
+        case common::Opcode::LDH:
+        case common::Opcode::LDW: {
+            validateRegisterIndex(instruction.a, "destination");
+            validateRegisterIndex(instruction.b, "base address");
+
+            const std::uint32_t address = readRegister(instruction.b) + instruction.c;
+            std::uint32_t result = 0;
+
+            switch (instruction.opcode) {
+                case common::Opcode::LDB:
+                    result = memory_.read8(address);
+                    break;
+                case common::Opcode::LDH:
+                    result = memory_.read16(address);
+                    break;
+                case common::Opcode::LDW:
+                    result = memory_.read32(address);
+                    break;
+                default:
+                    throw std::logic_error("unreachable opcode in load block");
+            }
+
+            writeRegister(instruction.a, result);
+            advancePc();
+            return;
+        }
+
+        case common::Opcode::STB:
+        case common::Opcode::STH:
+        case common::Opcode::STW: {
+            validateRegisterIndex(instruction.a, "source");
+            validateRegisterIndex(instruction.b, "base address");
+
+            const std::uint32_t value = readRegister(instruction.a);
+            const std::uint32_t address = readRegister(instruction.b) + instruction.c;
+
+            switch (instruction.opcode) {
+                case common::Opcode::STB:
+                    memory_.write8(address, static_cast<std::uint8_t>(value & 0xFFu));
+                    break;
+                case common::Opcode::STH:
+                    memory_.write16(address, static_cast<std::uint16_t>(value & 0xFFFFu));
+                    break;
+                case common::Opcode::STW:
+                    memory_.write32(address, value);
+                    break;
+                default:
+                    throw std::logic_error("unreachable opcode in store block");
+            }
+
+            advancePc();
+            return;
+        }
+
+        case common::Opcode::SXT:
+        case common::Opcode::BSWAP: {
+            validateRegisterIndex(instruction.a, "destination");
+            validateRegisterIndex(instruction.b, "source");
+
+            const std::uint32_t source = readRegister(instruction.b);
+            std::uint32_t result = 0;
+
+            switch (instruction.opcode) {
+                case common::Opcode::SXT:
+                    result = sign_extend(source, instruction.c);
+                    break;
+                case common::Opcode::BSWAP:
+                    result = byte_swap(source, instruction.c);
+                    break;
+                default:
+                    throw std::logic_error("unreachable opcode in conversion block");
+            }
+
+            writeRegister(instruction.a, result);
+            advancePc();
+            return;
+        }
         default:
             throw std::runtime_error("invalid opcode");
     }
 }
 
 void Emulator::step() {
-    if (isFinished()) { // unlikely
+    if (isFinished()) {
         return;
     }
 

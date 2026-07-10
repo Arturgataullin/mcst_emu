@@ -41,6 +41,30 @@ namespace common {
         if (lexeme == "SDIV") {
             return Operation::SDIV;
         }
+        if (lexeme == "LDB") {
+            return Operation::LDB;
+        }
+        if (lexeme == "LDH") {
+            return Operation::LDH;
+        }
+        if (lexeme == "LDW") {
+            return Operation::LDW;
+        }
+        if (lexeme == "STB") {
+            return Operation::STB;
+        }
+        if (lexeme == "STH") {
+            return Operation::STH;
+        }
+        if (lexeme == "STW") {
+            return Operation::STW;
+        }
+        if (lexeme == "SXT") {
+            return Operation::SXT;
+        }
+        if (lexeme == "BSWAP") {
+            return Operation::BSWAP;
+        }
         if (lexeme == "MOV") {
             return Operation::MOV;
         }
@@ -72,6 +96,14 @@ namespace common {
             case Operation::MUL:  return "MUL";
             case Operation::UDIV: return "UDIV";
             case Operation::SDIV: return "SDIV";
+            case Operation::LDB:  return "LDB";
+            case Operation::LDH:  return "LDH";
+            case Operation::LDW:  return "LDW";
+            case Operation::STB:  return "STB";
+            case Operation::STH:  return "STH";
+            case Operation::STW:  return "STW";
+            case Operation::SXT:  return "SXT";
+            case Operation::BSWAP: return "BSWAP";
             case Operation::MOV:  return "MOV";
             case Operation::NEG:  return "NEG";
             case Operation::NOT: return "NOT";
@@ -96,6 +128,14 @@ namespace common {
             case Opcode::MUL:  return "MUL";
             case Opcode::UDIV: return "UDIV";
             case Opcode::SDIV: return "SDIV";
+            case Opcode::LDB:  return "LDB";
+            case Opcode::LDH:  return "LDH";
+            case Opcode::LDW:  return "LDW";
+            case Opcode::STB:  return "STB";
+            case Opcode::STH:  return "STH";
+            case Opcode::STW:  return "STW";
+            case Opcode::SXT:  return "SXT";
+            case Opcode::BSWAP: return "BSWAP";
         }
 
         return "UNKNOWN";
@@ -116,6 +156,14 @@ namespace common {
             case Operation::MUL:  return Opcode::MUL;
             case Operation::UDIV: return Opcode::UDIV;
             case Operation::SDIV: return Opcode::SDIV;
+            case Operation::LDB:  return Opcode::LDB;
+            case Operation::LDH:  return Opcode::LDH;
+            case Operation::LDW:  return Opcode::LDW;
+            case Operation::STB:  return Opcode::STB;
+            case Operation::STH:  return Opcode::STH;
+            case Operation::STW:  return Opcode::STW;
+            case Operation::SXT:  return Opcode::SXT;
+            case Operation::BSWAP: return Opcode::BSWAP;
             default:
                 throw std::logic_error("unknown operation");
         }

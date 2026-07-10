@@ -359,6 +359,29 @@ TEST_CASE("parser parses single SDIV instruction") {
     REQUIRE(asRegister(inst.operands[2]).number == 3);
 }
 
+TEST_CASE("parser parses memory-format instruction with two registers and imm8") {
+    std::vector<Token> tokens = {
+        op("LDB"),
+        reg("R1", 1, 1, 5),
+        reg("R2", 2, 1, 8),
+        num("0xFF", 0xFF, 1, 11),
+        eof(1, 15)
+    };
+
+    Parser parser(std::move(tokens));
+    Program program = parser.parseProgram();
+
+    REQUIRE(program.instructions.size() == 1);
+
+    const Instruction& inst = program.instructions[0];
+    REQUIRE(inst.operation == common::Operation::LDB);
+    REQUIRE(inst.operands.size() == 3);
+
+    REQUIRE(asRegister(inst.operands[0]).number == 1);
+    REQUIRE(asRegister(inst.operands[1]).number == 2);
+    REQUIRE(asImmediate(inst.operands[2]).value == 0xFF);
+}
+
 TEST_CASE("parser parses multiple instructions separated by newlines") {
     std::vector<Token> tokens = {
         nl(1, 1),
@@ -569,6 +592,20 @@ TEST_CASE("parser rejects too large immediate") {
         reg("R1", 1, 1, 4),
         num("0x10000", 0x10000, 1, 7),
         eof(1, 14)
+    };
+
+    Parser parser(std::move(tokens));
+
+    REQUIRE_THROWS_WITH(parser.parseProgram(), ContainsSubstring("immediate value is out of range"));
+}
+
+TEST_CASE("parser rejects memory-format instruction with too large imm8") {
+    std::vector<Token> tokens = {
+        op("STW"),
+        reg("R1", 1, 1, 5),
+        reg("R2", 2, 1, 8),
+        num("0x100", 0x100, 1, 11),
+        eof(1, 16)
     };
 
     Parser parser(std::move(tokens));

@@ -245,6 +245,18 @@ Instruction Parser::parseInstruction() {
             instruction.operands.push_back(parseRegisterOperand());
             instruction.operands.push_back(parseRegisterOperand());
             break;
+        case common::Operation::LDB:
+        case common::Operation::LDH:
+        case common::Operation::LDW:
+        case common::Operation::STB:
+        case common::Operation::STH:
+        case common::Operation::STW:
+        case common::Operation::SXT:
+        case common::Operation::BSWAP:
+            instruction.operands.push_back(parseRegisterOperand());
+            instruction.operands.push_back(parseRegisterOperand());
+            instruction.operands.push_back(parseImmediateOperand(common::immediate8Max));
+            break;
         case common::Operation::MOV:
         case common::Operation::NEG:
             instruction.operands.push_back(parseRegisterOperand());

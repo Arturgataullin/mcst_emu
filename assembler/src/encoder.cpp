@@ -87,6 +87,34 @@ std::uint32_t Encoder::encodeInstruction(const Instruction& instruction) const {
             word |= static_cast<std::uint32_t>(rt) << 24;
             return word;
         }
+
+        case common::Operation::LDB:
+        case common::Operation::LDH:
+        case common::Operation::LDW:
+        case common::Operation::STB:
+        case common::Operation::STH:
+        case common::Operation::STW:
+        case common::Operation::SXT:
+        case common::Operation::BSWAP: {
+            if (instruction.operands.size() != 3) {
+                fail(instruction.location, std::string(common::toString(instruction.operation)) + " expects 3 operands");
+            }
+
+            const std::uint8_t ra = requireRegister(instruction.operands[0], instruction.location, "first register");
+            const std::uint8_t rb = requireRegister(instruction.operands[1], instruction.location, "second register");
+            const std::uint8_t imm = requireImmediate8(instruction.operands[2], instruction.location, "immediate");
+
+            // byte0 = opcode
+            // byte1 = ra
+            // byte2 = rb
+            // byte3 = imm8
+            std::uint32_t word = 0;
+            word |= static_cast<std::uint32_t>(common::opcodeForOperation(instruction.operation));
+            word |= static_cast<std::uint32_t>(ra) << 8;
+            word |= static_cast<std::uint32_t>(rb) << 16;
+            word |= static_cast<std::uint32_t>(imm) << 24;
+            return word;
+        }
         default:
             fail(instruction.location, "unknown operation during encoding");
     }
@@ -111,6 +139,19 @@ std::uint16_t Encoder::requireImmediate(const Operand& operand, const SourceLoca
     }
 
     return static_cast<std::uint16_t>(value);
+}
+
+std::uint8_t Encoder::requireImmediate8(const Operand& operand, const SourceLocation& location, const char* operandName) const {
+    if (!std::holds_alternative<ImmediateOperand>(operand)) {
+        fail(location, std::string(operandName) + " must be an immediate");
+    }
+
+    const auto value = std::get<ImmediateOperand>(operand).value;
+    if (value > common::immediate8Max) {
+        fail(location, std::string(operandName) + " must fit into 8 bits");
+    }
+
+    return static_cast<std::uint8_t>(value);
 }
 
 [[noreturn]] void Encoder::fail(const SourceLocation& location, const std::string& message) const {

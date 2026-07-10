@@ -209,6 +209,29 @@ void Emulator::writeDisasmTrace(
             writeRegisterOperand(out, instruction.b, readBefore(instruction.b));
             writeRegisterOperand(out, instruction.c, readBefore(instruction.c));
             break;
+
+        case common::Opcode::LDB:
+        case common::Opcode::LDH:
+        case common::Opcode::LDW:
+            writeRegisterOperand(out, instruction.a, readRegister(instruction.a));
+            writeRegisterOperand(out, instruction.b, readBefore(instruction.b));
+            out << " imm (0x" << std::hex << static_cast<unsigned>(instruction.c) << ')';
+            break;
+
+        case common::Opcode::STB:
+        case common::Opcode::STH:
+        case common::Opcode::STW:
+            writeRegisterOperand(out, instruction.a, readBefore(instruction.a));
+            writeRegisterOperand(out, instruction.b, readBefore(instruction.b));
+            out << " imm (0x" << std::hex << static_cast<unsigned>(instruction.c) << ')';
+            break;
+
+        case common::Opcode::SXT:
+        case common::Opcode::BSWAP:
+            writeRegisterOperand(out, instruction.a, readRegister(instruction.a));
+            writeRegisterOperand(out, instruction.b, readBefore(instruction.b));
+            out << " imm (0x" << std::hex << static_cast<unsigned>(instruction.c) << ')';
+            break;
     }
 
     out << '\n';
