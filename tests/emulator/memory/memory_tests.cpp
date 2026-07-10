@@ -4,6 +4,7 @@
 #include "opMemory.h"
 
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 using Catch::Matchers::ContainsSubstring;
@@ -14,6 +15,12 @@ struct CellWriteEvent {
     std::uint32_t address = 0;
     std::uint32_t oldData = 0;
     std::uint32_t newData = 0;
+};
+
+struct UninitReadEvent {
+    std::uint32_t address = 0;
+    std::size_t size = 0;
+    std::uint8_t mask = 0;
 };
 
 }
@@ -51,6 +58,46 @@ TEST_CASE("memory rejects invalid sizes") {
         emulator::Memory(3),
         ContainsSubstring("multiple of 4")
     );
+}
+
+TEST_CASE("memory can represent full 32-bit address space sparsely") {
+    const std::size_t fullAddressSpace =
+        static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max()) + 1u;
+    emulator::Memory memory(fullAddressSpace);
+
+    const std::uint32_t lastWordAddress = std::numeric_limits<std::uint32_t>::max() - 3u;
+
+    memory.write32(lastWordAddress, 0xAABBCCDD);
+
+    REQUIRE(memory.size() == fullAddressSpace);
+    REQUIRE(memory.read32(lastWordAddress) == 0xAABBCCDD);
+    REQUIRE(memory.read8(0) == 0x00);
+}
+
+TEST_CASE("memory supports access across sparse block boundary") {
+    emulator::Memory memory(emulator::Memory::blockSize * 2);
+    std::vector<CellWriteEvent> events;
+
+    memory.setCellWriteHandler([&events](
+        std::uint32_t address,
+        std::uint32_t oldData,
+        std::uint32_t newData
+    ) {
+        events.push_back({address, oldData, newData});
+    });
+
+    const std::uint32_t address = static_cast<std::uint32_t>(emulator::Memory::blockSize - 1);
+
+    memory.write32(address, 0x11223344);
+
+    REQUIRE(memory.read32(address) == 0x11223344);
+    REQUIRE(events.size() == 2);
+    REQUIRE(events[0].address == emulator::Memory::blockSize - 4);
+    REQUIRE(events[0].oldData == 0x00000000);
+    REQUIRE(events[0].newData == 0x44000000);
+    REQUIRE(events[1].address == emulator::Memory::blockSize);
+    REQUIRE(events[1].oldData == 0x00000000);
+    REQUIRE(events[1].newData == 0x00112233);
 }
 
 TEST_CASE("memory load stores bytes at base address") {
@@ -171,6 +218,46 @@ TEST_CASE("memory load does not report cell write events") {
 
     REQUIRE(events.empty());
     REQUIRE(memory.read32(0) == 0x44332211);
+}
+
+TEST_CASE("memory reports uninitialized bytes on read") {
+    emulator::Memory memory(16);
+    std::vector<UninitReadEvent> events;
+
+    memory.setUninitReadHandler([&events](
+        std::uint32_t address,
+        std::size_t size,
+        std::uint8_t mask
+    ) {
+        events.push_back({address, size, mask});
+    });
+
+    memory.write8(1, 0xAA);
+
+    REQUIRE(memory.read32(0) == 0x0000AA00);
+    REQUIRE(events.size() == 1);
+    REQUIRE(events[0].address == 0);
+    REQUIRE(events[0].size == 4);
+    REQUIRE(events[0].mask == 0b1101);
+}
+
+TEST_CASE("memory treats loaded and written bytes as initialized") {
+    emulator::Memory memory(16);
+    std::vector<UninitReadEvent> events;
+
+    memory.setUninitReadHandler([&events](
+        std::uint32_t address,
+        std::size_t size,
+        std::uint8_t mask
+    ) {
+        events.push_back({address, size, mask});
+    });
+
+    memory.load({0x11, 0x22}, 0);
+    memory.write16(2, 0x4433);
+
+    REQUIRE(memory.read32(0) == 0x44332211);
+    REQUIRE(events.empty());
 }
 
 TEST_CASE("memory load does not affect bytes outside loaded range") {

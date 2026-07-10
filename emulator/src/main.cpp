@@ -34,6 +34,10 @@ int main(int argc, char* argv[]) {
         emulator::Emulator emulator(options.ramSize);
         emulator.loadProgramFromFile(options.inputPath);
 
+        if (options.warnings.uninitializedRam) {
+            emulator.enableUninitializedRamWarnings(std::cerr);
+        }
+
 #if MCST_TRACING
         if (options.trace.disasm || options.trace.ramWrites) {
             emulator.setTraceTicks(std::move(options.trace.tickRanges));

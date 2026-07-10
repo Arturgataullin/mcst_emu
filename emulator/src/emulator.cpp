@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iterator>
+#include <ostream>
 #include <sstream>
 #include <stdexcept>
 
@@ -38,9 +39,9 @@ void Emulator::loadProgram(const std::vector<std::uint8_t>& program, std::uint32
     programBase_ = baseAddress;
     programEnd_ = baseAddress + static_cast<std::uint32_t>(program.size());
     pc_ = baseAddress;
+    tick_ = 0;
 
 #if MCST_TRACING
-    tick_ = 0;
     tickRangeFilter_.reset();
 #endif
 }
@@ -97,6 +98,43 @@ void Emulator::writeRegister(std::uint8_t reg, std::uint32_t value) {
 }
 
 namespace {
+
+class StreamStateGuard {
+public:
+    explicit StreamStateGuard(std::ostream& out)
+        : out_(out),
+          flags_(out.flags()),
+          fill_(out.fill()),
+          width_(out.width()) {
+        out_.width(0);
+    }
+
+    ~StreamStateGuard() {
+        out_.flags(flags_);
+        out_.fill(fill_);
+        out_.width(width_);
+    }
+
+    StreamStateGuard(const StreamStateGuard&) = delete;
+    StreamStateGuard& operator=(const StreamStateGuard&) = delete;
+
+private:
+    std::ostream& out_;
+    std::ios_base::fmtflags flags_;
+    char fill_;
+    std::streamsize width_;
+};
+
+void writeHexWord(std::ostream& out, std::uint32_t value) {
+    out << "0x"
+        << std::hex
+        << std::nouppercase
+        << std::right
+        << std::setw(8)
+        << std::setfill('0')
+        << value
+        << std::setfill(' ');
+}
 
 // реализация сдвига без преобразования
 std::uint32_t sra_without_cast(std::uint32_t val, std::uint32_t shift) {
@@ -170,6 +208,54 @@ std::uint32_t byte_swap(std::uint32_t value, std::uint8_t mode) {
     }
 }
 
+}
+
+void Emulator::enableUninitializedRamWarnings(std::ostream& output) {
+    uninitRamWarningOutput_ = &output;
+    memory_.setUninitReadHandler([this](
+        std::uint32_t address,
+        std::size_t byteCount,
+        std::uint8_t uninitMask
+    ) {
+        // memory сообщает только адреса и маску, а tick, pc и формат предупреждения остаются в Emulator
+        writeUninitRamWarning(address, byteCount, uninitMask);
+    });
+}
+
+void Emulator::writeUninitRamWarning(
+    std::uint32_t address,
+    std::size_t byteCount,
+    std::uint8_t uninitMask
+) const {
+    if (uninitRamWarningOutput_ == nullptr) {
+        return;
+    }
+
+    std::ostream& out = *uninitRamWarningOutput_;
+    StreamStateGuard guard(out);
+
+    out << std::dec
+        << tick_
+        << " WARN uninit-ram pc=";
+    writeHexWord(out, pc_);
+    out << " read "
+        << byteCount
+        << " byte(s) at ";
+    writeHexWord(out, address);
+    out << " uninit:";
+
+    bool first = true;
+    for (std::size_t i = 0; i < byteCount; ++i) {
+        if ((uninitMask & (1u << i)) == 0) {
+            continue;
+        }
+
+        out << (first ? ' ' : ',');
+        writeHexWord(out, address + static_cast<std::uint32_t>(i));
+        first = false;
+    }
+
+    out << '\n';
 }
 
 void Emulator::execute(const DecodedInstruction& instruction) {
@@ -393,9 +479,10 @@ void Emulator::step() {
 
     execute(instruction);
 
-#if MCST_TRACING
-    // счётчик увеличивается только после успешного исполнения команды
+    // счётчик увеличивается только после успешного выполнения инструкции
     ++tick_;
+
+#if MCST_TRACING
     if (emitDisasmTrace) {
         writeDisasmTrace(
             currentTick,

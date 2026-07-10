@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <iosfwd>
 #include <string>
 #include <vector>
 
@@ -15,7 +16,6 @@
 #endif
 
 #if MCST_TRACING
-#include <iosfwd>
 #include "ranges.h"
 #endif
 
@@ -45,6 +45,7 @@ public:
     bool isFinished() const noexcept;
 
     std::string dumpRegisters() const;
+    void enableUninitializedRamWarnings(std::ostream& output);
 
 #if MCST_TRACING
     // void enableDisasmTrace(std::ostream& output, std::vector<TickRange> ranges = {});
@@ -63,6 +64,7 @@ private:
     void validateRegisterIndex(std::uint8_t reg, const char* fieldName) const;
     std::uint32_t readRegister(std::uint8_t reg) const;
     void writeRegister(std::uint8_t reg, std::uint32_t value);
+    void writeUninitRamWarning(std::uint32_t address, std::size_t byteCount, std::uint8_t uninitMask) const;
 
 #if MCST_TRACING
     // снимок нужен для вывода исходных значений регистров-источников
@@ -99,6 +101,8 @@ private:
     std::uint32_t pc_ = common::resetAddress;
     std::uint32_t programBase_ = common::resetAddress;
     std::uint32_t programEnd_ = common::resetAddress;
+    std::uint64_t tick_ = 0;
+    std::ostream* uninitRamWarningOutput_ = nullptr;
 
 #if MCST_TRACING
     std::ostream* traceOutput_ = nullptr;
@@ -107,7 +111,6 @@ private:
     AddressRangeFilter ramWriteAddressFilter_;
     // события RAM write копятся во время execute(), а печатаются после завершения инструкции
     std::vector<RamWriteTraceEvent> pendingRamWriteTrace_;
-    std::uint64_t tick_ = 0;
 #endif
 };
 

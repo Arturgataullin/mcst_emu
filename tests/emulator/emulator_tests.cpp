@@ -350,6 +350,47 @@ TEST_CASE("emulator executes SXT and BSWAP instructions") {
     REQUIRE(regs[7] == 0xAABBCCDDu);
 }
 
+TEST_CASE("emulator warns on uninitialized RAM read") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x40, 0x00, // LI R0 64
+        0x10, 0x01, 0x00, 0x02  // LDB R1 R0 2
+    };
+
+    std::ostringstream warnings;
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.enableUninitializedRamWarnings(warnings);
+    emulator.run();
+
+    REQUIRE(
+        warnings.str() ==
+        "1 WARN uninit-ram pc=0x00000004 read 1 byte(s) at 0x00000042 uninit: 0x00000042\n"
+    );
+    REQUIRE(emulator.registers()[1] == 0u);
+}
+
+TEST_CASE("emulator warning lists only uninitialized bytes from a multi-byte read") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x40, 0x00, // LI R0 64
+        0x00, 0x01, 0xAB, 0x00, // LI R1 0xAB
+        0x13, 0x01, 0x00, 0x01, // STB R1 R0 1
+        0x12, 0x02, 0x00, 0x00  // LDW R2 R0 0
+    };
+
+    std::ostringstream warnings;
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.enableUninitializedRamWarnings(warnings);
+    emulator.run();
+
+    REQUIRE(
+        warnings.str() ==
+        "3 WARN uninit-ram pc=0x0000000c read 4 byte(s) at 0x00000040 uninit: "
+        "0x00000040,0x00000042,0x00000043\n"
+    );
+    REQUIRE(emulator.registers()[2] == 0x0000AB00u);
+}
+
 TEST_CASE("emulator rejects division by zero") {
     SECTION("unsigned division") {
         const std::vector<std::uint8_t> program = {

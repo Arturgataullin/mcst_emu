@@ -237,8 +237,8 @@ CommandLineOptions parseCommandLine(int argc, char* argv[]) {
                     break;
                 case OptionName::TraceTicks:
                     traceTicksSeen = true;
-                    break;
                     options.trace.tickRanges = parseTickRanges(parsed->value);
+                    break;
                 case OptionName::RamSize:
                     options.ramSize = parseRamSize(parsed->value);
                     break;
