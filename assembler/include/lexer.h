@@ -20,27 +20,27 @@ private:
 
 public:
     explicit Lexer(std::string_view src);
-    std::vector<Token> tokenize();
+    [[nodiscard]] std::vector<Token> tokenize();
 private:
-    bool isAtEnd() const noexcept;
-    char current() const noexcept;
-    char peek(std::size_t offset = 1) const noexcept;
+    [[nodiscard]] bool isAtEnd() const noexcept;
+    [[nodiscard]] char current() const noexcept;
+    [[nodiscard]] char peek(std::size_t offset = 1) const noexcept;
     char advance() noexcept;
     void skipWhitespace() noexcept;
     void skipComment() noexcept;
 
-    Token makeSimpleToken(TokenType type, std::string lexeme, SourceLocation location) const;
-    Token lexOperationOrRegister();
-    Token lexNumber();
+    [[nodiscard]] Token makeSimpleToken(TokenType type, std::string lexeme, SourceLocation location) const;
+    [[nodiscard]] Token lexOperationOrRegister();
+    [[nodiscard]] Token lexNumber();
 
-    std::uint64_t parseInteger(const std::string& lexeme, const SourceLocation& location);
+    [[nodiscard]] std::uint64_t parseInteger(const std::string& lexeme, const SourceLocation& location);
 
     [[noreturn]] void fail(const SourceLocation& location, const std::string& message) const;
 
-    static std::string toUpperCopy(std::string_view text);
-    static bool isOperationLike(const std::string& upperLexeme);
-    static std::optional<std::int64_t> parseRegisterIndex(std::string_view lexeme);
-    static bool isCommentStart(const char ch);
-    static bool isTokenSeparator(char ch, char next_ch);
+    [[nodiscard]] static std::string toUpperCopy(std::string_view text);
+    [[nodiscard]] static bool isOperationLike(const std::string& upperLexeme);
+    [[nodiscard]] static std::optional<std::int64_t> parseRegisterIndex(std::string_view lexeme);
+    [[nodiscard]] static bool isCommentStart(const char ch);
+    [[nodiscard]] static bool isTokenSeparator(char ch, char next_ch);
 };
 }

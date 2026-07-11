@@ -48,15 +48,15 @@ public:
 
     void load(const std::vector<std::uint8_t>& bytes, std::uint32_t baseAddress = common::resetAddress);
 
-    std::uint8_t read8(std::uint32_t address) const;
-    std::uint16_t read16(std::uint32_t address) const;
-    std::uint32_t read32(std::uint32_t address) const;
+    [[nodiscard]] std::uint8_t read8(std::uint32_t address) const;
+    [[nodiscard]] std::uint16_t read16(std::uint32_t address) const;
+    [[nodiscard]] std::uint32_t read32(std::uint32_t address) const;
 
     void write8(std::uint32_t address, std::uint8_t value);
     void write16(std::uint32_t address, std::uint16_t value);
     void write32(std::uint32_t address, std::uint32_t value);
 
-    std::size_t size() const noexcept;
+    [[nodiscard]] std::size_t size() const noexcept;
     void setCellWriteHandler(CellWriteHandler handler);
     void setUninitReadHandler(UninitReadHandler handler);
 
@@ -68,7 +68,7 @@ private:
     };
 
     // функции без проверки доступности памти по адресу для использования в write/read16,32
-    std::uint8_t read8Unchecked(std::uint32_t address) const;
+    [[nodiscard]] std::uint8_t read8Unchecked(std::uint32_t address) const;
     void write8Unchecked(std::uint32_t address, std::uint8_t value);
 
     void writeUnchecked(std::uint32_t address, std::uint32_t value, std::size_t byteCount);
@@ -82,17 +82,17 @@ private:
 
     void checkRange(std::uint32_t address, std::size_t size) const;
     void markInitialized(std::uint32_t address, std::size_t byteCount);
-    std::uint8_t getUninitMask(std::uint32_t address, std::size_t byteCount) const;
+    [[nodiscard]] std::uint8_t getUninitMask(std::uint32_t address, std::size_t byteCount) const;
     void notifyUninitRead(std::uint32_t address, std::size_t byteCount) const;
-    std::uint32_t readCellUnchecked(std::size_t cellIndex) const;
+    [[nodiscard]] std::uint32_t readCellUnchecked(std::size_t cellIndex) const;
     void writeCellUnchecked(std::size_t cellIndex, std::uint32_t value);
-    Block& getOrCreateBlock(std::uint32_t blockIndex);
-    const Block* findBlock(std::uint32_t blockIndex) const;
-    static std::uint32_t blockIndexForAddress(std::uint32_t address) noexcept;
-    static std::size_t blockOffsetForAddress(std::uint32_t address) noexcept;
+    [[nodiscard]] Block& getOrCreateBlock(std::uint32_t blockIndex);
+    [[nodiscard]] const Block* findBlock(std::uint32_t blockIndex) const;
+    [[nodiscard]] static std::uint32_t blockIndexForAddress(std::uint32_t address) noexcept;
+    [[nodiscard]] static std::size_t blockOffsetForAddress(std::uint32_t address) noexcept;
 
     // эти функции работают с уже найденным блоком, чтобы не делать поиск в unordered_map на каждый байт
-    static std::uint8_t readByteFromBlock(const Block& block, std::size_t blockOffset) noexcept;
+    [[nodiscard]] static std::uint8_t readByteFromBlock(const Block& block, std::size_t blockOffset) noexcept;
     static void writeByteToBlock(Block& block, std::size_t blockOffset, std::uint8_t value) noexcept;
     static void markInitializedInBlock(Block& block, std::size_t blockOffset, std::size_t byteCount);
 

@@ -22,7 +22,7 @@ using AddressRange = Range<std::uint32_t>;
 
 // логика диапазонов одинаковая для тиков и адресов, отличается только тип числа
 template <typename T>
-std::vector<Range<T>> normalizeRanges(std::vector<Range<T>> ranges) {
+[[nodiscard]] std::vector<Range<T>> normalizeRanges(std::vector<Range<T>> ranges) {
     std::sort(ranges.begin(), ranges.end(), [](const Range<T>& lhs, const Range<T>& rhs) {
         if (lhs.begin != rhs.begin) {
             return lhs.begin < rhs.begin;
@@ -67,7 +67,7 @@ public:
         ranges_ = normalizeRanges(std::move(ranges));
     }
 
-    bool contains(T value) const noexcept {
+    [[nodiscard]] bool contains(T value) const noexcept {
         if (ranges_.empty()) {
             return true;
         }
@@ -90,7 +90,7 @@ public:
         return value <= candidate->end;
     }
 
-    bool intersects(T begin, T end) const noexcept {
+    [[nodiscard]] bool intersects(T begin, T end) const noexcept {
         if (ranges_.empty()) {
             return true;
         }
@@ -126,7 +126,7 @@ private:
 using TickRangeFilter = RangeFilter<std::uint64_t>;
 using AddressRangeFilter = RangeFilter<std::uint32_t>;
 
-std::vector<TickRange> parseTickRanges(std::string_view text);
-std::vector<AddressRange> parseAddressRanges(std::string_view text);
+[[nodiscard]] std::vector<TickRange> parseTickRanges(std::string_view text);
+[[nodiscard]] std::vector<AddressRange> parseAddressRanges(std::string_view text);
 
 }

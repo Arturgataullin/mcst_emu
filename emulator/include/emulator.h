@@ -40,11 +40,11 @@ public:
     void run();
     void step();
 
-    const std::array<std::uint32_t, common::registerCount>& registers() const noexcept;
-    std::uint64_t pc() const noexcept;
-    bool isFinished() const noexcept;
+    [[nodiscard]] const std::array<std::uint32_t, common::registerCount>& registers() const noexcept;
+    [[nodiscard]] std::uint64_t pc() const noexcept;
+    [[nodiscard]] bool isFinished() const noexcept;
 
-    std::string dumpRegisters() const;
+    [[nodiscard]] std::string dumpRegisters() const;
     void enableUninitializedRamWarnings(std::ostream& output);
 
 #if MCST_TRACING
@@ -56,13 +56,13 @@ public:
 #endif
 
 private:
-    std::uint32_t fetchInstructionWord() const;
-    DecodedInstruction decode(std::uint32_t word) const;
+    [[nodiscard]] std::uint32_t fetchInstructionWord() const;
+    [[nodiscard]] DecodedInstruction decode(std::uint32_t word) const;
     void execute(const DecodedInstruction& instruction);
 
-    static std::vector<std::uint8_t> readBinaryFile(const std::string& inputPath);
+    [[nodiscard]] static std::vector<std::uint8_t> readBinaryFile(const std::string& inputPath);
     void validateRegisterIndex(std::uint8_t reg, const char* fieldName) const;
-    std::uint32_t readRegister(std::uint8_t reg) const;
+    [[nodiscard]] std::uint32_t readRegister(std::uint8_t reg) const;
     void writeRegister(std::uint8_t reg, std::uint32_t value);
     void writeUninitRamWarning(std::uint32_t address, std::size_t byteCount, std::uint8_t uninitMask) const;
 
@@ -89,7 +89,7 @@ private:
         std::uint32_t newData = 0;
     };
 
-    TraceSnapshot captureTraceSnapshot(const DecodedInstruction& instruction) const;
+    [[nodiscard]] TraceSnapshot captureTraceSnapshot(const DecodedInstruction& instruction) const;
     void collectRamWriteTrace(std::uint32_t cellAddress, std::uint32_t oldData, std::uint32_t newData);
     void writeRamWriteTrace(const RamWriteTraceEvent& event) const;
     void flushRamWriteTrace();

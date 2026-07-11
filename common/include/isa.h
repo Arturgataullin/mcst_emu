@@ -80,9 +80,9 @@ namespace common {
         BSWAP = 0x17
     };
 
-    std::optional<Operation> operationFromString(std::string_view lexeme);
-    std::string_view toString(Operation op);
-    std::string_view toString(Opcode opcode);
-    Opcode opcodeForOperation(Operation op);
+    [[nodiscard]] std::optional<Operation> operationFromString(std::string_view lexeme);
+    [[nodiscard]] std::string_view toString(Operation op);
+    [[nodiscard]] std::string_view toString(Opcode opcode);
+    [[nodiscard]] Opcode opcodeForOperation(Operation op);
 
 }

@@ -1,0 +1,12 @@
+# Word, halfword and byte memory operations
+LI R0 0x0040
+LFI R1 0x11223344
+STW R1 R0 0x0
+LDB R2 R0 0x0
+LDH R3 R0 0x1
+LDW R4 R0 0x0
+
+LI R5 0xABCD
+STH R5 R0 0x4
+STB R5 R0 0x6
+LDW R6 R0 0x4

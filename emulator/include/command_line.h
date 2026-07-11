@@ -34,6 +34,6 @@ struct CommandLineOptions {
     bool isNeedHelp = false;
 };
 
-CommandLineOptions parseCommandLine(int argc, char* argv[]);
+[[nodiscard]] CommandLineOptions parseCommandLine(int argc, char* argv[]);
 
 }

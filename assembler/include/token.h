@@ -28,6 +28,6 @@ struct Token {
     std::optional<std::uint64_t> numberValue {};
 };
 
-std::string_view toString(TokenType type);
+[[nodiscard]] std::string_view toString(TokenType type);
 
 }

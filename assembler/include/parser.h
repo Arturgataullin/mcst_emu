@@ -36,24 +36,24 @@ class Parser {
 public:
     explicit Parser(std::vector<Token> tokens);
 
-    Program parseProgram();
+    [[nodiscard]] Program parseProgram();
 
 private:
-    bool isAtEnd() const noexcept;
-    const Token& current() const noexcept;
-    const Token& previous() const noexcept;
+    [[nodiscard]] bool isAtEnd() const noexcept;
+    [[nodiscard]] const Token& current() const noexcept;
+    [[nodiscard]] const Token& previous() const noexcept;
     const Token& advance() noexcept;
-    bool check(TokenType type) const noexcept;
+    [[nodiscard]] bool check(TokenType type) const noexcept;
     bool match(TokenType type) noexcept;
 
     void skipNewLines() noexcept;
 
-    Instruction parseInstruction();
+    [[nodiscard]] Instruction parseInstruction();
     
     void appendLoweredInstruction(Instruction instruction, std::vector<Instruction>& out);
 
-    RegisterOperand parseRegisterOperand();
-    ImmediateOperand parseImmediateOperand(std::uint64_t maxValue);
+    [[nodiscard]] RegisterOperand parseRegisterOperand();
+    [[nodiscard]] ImmediateOperand parseImmediateOperand(std::uint64_t maxValue);
 
     void expect(TokenType type, const std::string& message);
 

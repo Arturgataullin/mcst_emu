@@ -1,0 +1,10 @@
+# Sign extension and byte swap
+LFI R0 0x000080ff
+SXT R1 R0 0x0
+SXT R2 R0 0x1
+SXT R3 R0 0x2
+
+LFI R4 0x11223344
+BSWAP R5 R4 0x1
+BSWAP R6 R4 0x2
+BSWAP R7 R4 0x0
