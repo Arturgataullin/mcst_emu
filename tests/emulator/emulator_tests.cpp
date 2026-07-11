@@ -4,6 +4,7 @@
 #include "emulator.h"
 
 #include <cstdint>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -86,6 +87,27 @@ TEST_CASE("emulator executes program loaded at non-zero base address") {
 
     REQUIRE(emulator.registers()[0] == 1u);
     REQUIRE(emulator.pc() == 20u);
+    REQUIRE(emulator.isFinished());
+}
+
+TEST_CASE("emulator supports program ending at top of 32-bit address space") {
+    const std::size_t fullAddressSpace =
+        static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max()) + 1u;
+    const std::uint32_t lastInstructionAddress =
+        std::numeric_limits<std::uint32_t>::max() - 3u;
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x01, 0x00 // LI R0 1
+    };
+
+    emulator::Emulator emulator(fullAddressSpace);
+    emulator.loadProgram(program, lastInstructionAddress);
+
+    REQUIRE_FALSE(emulator.isFinished());
+
+    emulator.step();
+
+    REQUIRE(emulator.registers()[0] == 1u);
+    REQUIRE(emulator.pc() == (std::uint64_t{1} << 32));
     REQUIRE(emulator.isFinished());
 }
 
@@ -606,6 +628,89 @@ TEST_CASE("trace reads aliased source operands from pre-instruction state") {
         trace.str() ==
         "---- 1 0x4 ----\n"
         "0x01010102 ADD R1 (0xa) R1 (0x5) R1 (0x5)\n"
+    );
+}
+
+TEST_CASE("emulator writes RAM trace for aligned STW") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x40, 0x00, // LI R0 64
+        0x00, 0x01, 0x44, 0x33, // LI R1 0x3344
+        0x01, 0x01, 0x22, 0x11, // LUI R1 0x1122
+        0x15, 0x01, 0x00, 0x00  // STW R1 R0 0
+    };
+
+    std::ostringstream trace;
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.enableRamWriteTrace(trace);
+    emulator.run();
+
+    REQUIRE(
+        trace.str() ==
+        "3 RAM [0x00000040] wr 0x00000000 -> 0x11223344\n"
+    );
+}
+
+TEST_CASE("emulator writes RAM trace for unaligned STW touching two cells") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x40, 0x00, // LI R0 64
+        0x00, 0x01, 0x44, 0x33, // LI R1 0x3344
+        0x01, 0x01, 0x22, 0x11, // LUI R1 0x1122
+        0x15, 0x01, 0x00, 0x01  // STW R1 R0 1
+    };
+
+    std::ostringstream trace;
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.enableRamWriteTrace(trace);
+    emulator.run();
+
+    REQUIRE(
+        trace.str() ==
+        "3 RAM [0x00000040] wr 0x00000000 -> 0x22334400\n"
+        "3 RAM [0x00000044] wr 0x00000000 -> 0x00000011\n"
+    );
+}
+
+TEST_CASE("RAM trace address filter matches touched bytes inside a cell") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x40, 0x00, // LI R0 64
+        0x00, 0x01, 0x44, 0x33, // LI R1 0x3344
+        0x01, 0x01, 0x22, 0x11, // LUI R1 0x1122
+        0x15, 0x01, 0x00, 0x01  // STW R1 R0 1
+    };
+
+    std::ostringstream trace;
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.enableRamWriteTrace(trace, {{65, 65}});
+    emulator.run();
+
+    REQUIRE(
+        trace.str() ==
+        "3 RAM [0x00000040] wr 0x00000000 -> 0x22334400\n"
+    );
+}
+
+TEST_CASE("RAM trace applies tick and address filters together") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x40, 0x00, // LI R0 64
+        0x00, 0x01, 0x44, 0x33, // LI R1 0x3344
+        0x01, 0x01, 0x22, 0x11, // LUI R1 0x1122
+        0x15, 0x01, 0x00, 0x00, // STW R1 R0 0
+        0x15, 0x01, 0x00, 0x04  // STW R1 R0 4
+    };
+
+    std::ostringstream trace;
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.setTraceTicks({{4, 4}});
+    emulator.enableRamWriteTrace(trace, {{68, 71}});
+    emulator.run();
+
+    REQUIRE(
+        trace.str() ==
+        "4 RAM [0x00000044] wr 0x00000000 -> 0x11223344\n"
     );
 }
 

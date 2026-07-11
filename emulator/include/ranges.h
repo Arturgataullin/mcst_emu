@@ -90,6 +90,33 @@ public:
         return value <= candidate->end;
     }
 
+    bool intersects(T begin, T end) const noexcept {
+        if (ranges_.empty()) {
+            return true;
+        }
+
+        if (begin > end) {
+            return false;
+        }
+
+        // ищем последний диапазон, который начинается не позже конца проверяемого диапазона
+        const auto it = std::upper_bound(
+            ranges_.begin(),
+            ranges_.end(),
+            end,
+            [](T lhs, const Range<T>& rhs) {
+                return lhs < rhs.begin;
+            }
+        );
+
+        if (it == ranges_.begin()) {
+            return false;
+        }
+
+        const auto candidate = std::prev(it);
+        return begin <= candidate->end;
+    }
+
     void reset() noexcept {}
 
 private:

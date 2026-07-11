@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iterator>
+#include <limits>
 #include <ostream>
 #include <sstream>
 #include <stdexcept>
@@ -30,6 +31,18 @@ void Emulator::loadProgram(const std::vector<std::uint8_t>& program, std::uint32
         throw std::runtime_error("program size must be a multiple of 4 bytes");
     }
 
+    constexpr std::uint64_t maxAddressableSize =
+        static_cast<std::uint64_t>(std::numeric_limits<std::uint32_t>::max()) + 1u;
+    if (program.size() > maxAddressableSize) {
+        throw std::runtime_error("program does not fit 32-bit address space");
+    }
+
+    const std::uint64_t base = baseAddress;
+    const std::uint64_t programSize = static_cast<std::uint64_t>(program.size());
+    if (base > maxAddressableSize - programSize) {
+        throw std::runtime_error("program does not fit 32-bit address space");
+    }
+
     registers_.fill(0);
     assemblerTempRegister_ = 0;
     memory_.clear();
@@ -37,7 +50,8 @@ void Emulator::loadProgram(const std::vector<std::uint8_t>& program, std::uint32
     memory_.load(program, baseAddress);
 
     programBase_ = baseAddress;
-    programEnd_ = baseAddress + static_cast<std::uint32_t>(program.size());
+    // конец диапазона может быть 0x1'0000'0000, поэтому хранится шире гостевого адреса
+    programEnd_ = base + programSize;
     pc_ = baseAddress;
     tick_ = 0;
 
@@ -50,7 +64,7 @@ const std::array<std::uint32_t, common::registerCount>& Emulator::registers() co
     return registers_;
 }
 
-std::uint32_t Emulator::pc() const noexcept {
+std::uint64_t Emulator::pc() const noexcept {
     return pc_;
 }
 
@@ -63,7 +77,7 @@ std::uint32_t Emulator::fetchInstructionWord() const {
         throw std::runtime_error("instruction fetch goes past loaded program");
     }
 
-    return memory_.read32(pc_);
+    return memory_.read32(static_cast<std::uint32_t>(pc_));
 }
 
 DecodedInstruction Emulator::decode(std::uint32_t word) const {
@@ -237,7 +251,7 @@ void Emulator::writeUninitRamWarning(
     out << std::dec
         << tick_
         << " WARN uninit-ram pc=";
-    writeHexWord(out, pc_);
+    writeHexWord(out, static_cast<std::uint32_t>(pc_));
     out << " read "
         << byteCount
         << " byte(s) at ";
@@ -453,7 +467,8 @@ void Emulator::step() {
         return;
     }
 
-    const std::uint32_t instructionAddress = pc_;
+    const std::uint32_t instructionAddress = static_cast<std::uint32_t>(pc_);
+    (void) instructionAddress;
     const std::uint32_t word = fetchInstructionWord();
     const DecodedInstruction instruction = decode(word);
 

@@ -7,19 +7,22 @@
 namespace emulator {
 
 // снаружи память адресуется байтами, внутри каждый выделенный блок хранит массив 4-байтовых ячеек
-constexpr std::size_t cellSize = 4;
+
 constexpr std::size_t cellMask = 3;
 constexpr std::size_t cellShift = 2;
 constexpr std::size_t blockShift = 12;
+// cellsPerBlock тоже степень двойки, поэтому номер блока по номеру ячейки можно получить сдвигом
+constexpr std::size_t cellsPerBlockShift = blockShift - cellShift;
 constexpr std::size_t blockMask = Memory::blockSize - 1;
 constexpr std::uint32_t byteMask = 0xffu;
 
-static_assert((cellSize & (cellSize - 1)) == 0, "cellSize must be power of two");
-static_assert(cellMask == cellSize - 1);
-static_assert((std::size_t{1} << cellShift) == cellSize);
+static_assert((Memory::cellSize & (Memory::cellSize - 1)) == 0, "cellSize must be power of two");
+static_assert(cellMask == Memory::cellSize - 1);
+static_assert((std::size_t{1} << cellShift) == Memory::cellSize);
 static_assert((Memory::blockSize & (Memory::blockSize - 1)) == 0, "blockSize must be power of two");
 static_assert(blockMask == Memory::blockSize - 1);
 static_assert((std::size_t{1} << blockShift) == Memory::blockSize);
+static_assert((std::size_t{1} << cellsPerBlockShift) == Memory::cellsPerBlock);
 
 Memory::Memory(std::size_t size) {
     constexpr std::size_t maxAddressableSize =
@@ -49,11 +52,24 @@ void Memory::clear() noexcept {
 void Memory::load(const std::vector<std::uint8_t>& bytes, std::uint32_t baseAddress) {
     checkRange(baseAddress, bytes.size());
 
-    for (std::size_t i = 0; i < bytes.size(); ++i) {
-        // загрузка программы не является исполненной командой записи в RAM
-        const std::uint32_t address = baseAddress + static_cast<std::uint32_t>(i);
-        write8Unchecked(address, bytes[i]);
-        markInitialized(address, 1);
+    std::size_t loaded = 0;
+    while (loaded < bytes.size()) {
+        // загрузка идет кусками внутри одного блока, чтобы не искать unordered_map для каждого байта
+        const std::uint32_t currentAddress = baseAddress + static_cast<std::uint32_t>(loaded);
+        const std::size_t blockOffset = blockOffsetForAddress(currentAddress);
+        const std::size_t bytesLeft = bytes.size() - loaded;
+        const std::size_t bytesInBlock =
+            bytesLeft < blockSize - blockOffset ? bytesLeft : blockSize - blockOffset;
+
+        Block& block = getOrCreateBlock(blockIndexForAddress(currentAddress));
+        for (std::size_t i = 0; i < bytesInBlock; ++i) {
+            // load не считается исполняемой записью в ram, поэтому callback трассировки здесь не вызывается
+            const std::size_t currentOffset = blockOffset + i;
+            writeByteToBlock(block, currentOffset, bytes[loaded + i]);
+            block.initialized.set(currentOffset);
+        }
+
+        loaded += bytesInBlock;
     }
 }
 
@@ -64,24 +80,12 @@ std::uint8_t Memory::read8Unchecked(std::uint32_t address) const {
         return 0;
     }
 
-    const std::size_t blockOffset = blockOffsetForAddress(address);
-    const std::size_t cellIndex = blockOffset >> cellShift; // заменяю / 4 на более быстрый >> 2
-    const std::size_t byteIndex = blockOffset & cellMask;
-    const std::size_t shift = byteIndex * 8; // количество сдвигов вправо для получения необходимого байта
-
-    return static_cast<std::uint8_t>((block->cells[cellIndex] >> shift) & byteMask);
+    return readByteFromBlock(*block, blockOffsetForAddress(address));
 }
 
 void Memory::write8Unchecked(std::uint32_t address, std::uint8_t value) {
     Block& block = getOrCreateBlock(blockIndexForAddress(address));
-    const std::size_t blockOffset = blockOffsetForAddress(address);
-    const std::size_t cellIndex = blockOffset >> cellShift;
-    const std::size_t byteIndex = blockOffset & cellMask;
-    const std::size_t shift = byteIndex * 8;
-    const std::uint32_t mask = byteMask << shift; // с помощью этой маски обнуляю байт, который нужно заменить
-
-    block.cells[cellIndex] = (block.cells[cellIndex] & ~mask) |
-                             (static_cast<std::uint32_t>(value) << shift);
+    writeByteToBlock(block, blockOffsetForAddress(address), value);
 }
 
 void Memory::writeUnchecked(std::uint32_t address, std::uint32_t value, std::size_t byteCount) {
@@ -140,12 +144,20 @@ std::uint32_t Memory::read32(std::uint32_t address) const {
     checkRange(address, 4);
     notifyUninitRead(address, 4);
 
-    std::uint32_t value = 0;
-    value |= static_cast<std::uint32_t>(read8Unchecked(address));
-    value |= static_cast<std::uint32_t>(read8Unchecked(address + 1)) << 8;
-    value |= static_cast<std::uint32_t>(read8Unchecked(address + 2)) << 16;
-    value |= static_cast<std::uint32_t>(read8Unchecked(address + 3)) << 24;
-    return value;
+    const std::size_t firstCellIndex = address >> cellShift;
+    const std::size_t byteIndex = address & cellMask;
+    const std::uint32_t firstCell = readCellUnchecked(firstCellIndex);
+
+    if (byteIndex == 0) {
+        // выровненное чтение 32 бит совпадает с одной внутренней ячейкой памяти
+        return firstCell;
+    }
+
+    // невыровненное чтение 32 бит всегда берет хвост текущей ячейки и начало следующей
+    const std::uint32_t secondCell = readCellUnchecked(firstCellIndex + 1);
+    const std::size_t firstShift = byteIndex * 8;
+    const std::size_t secondShift = (cellSize - byteIndex) * 8;
+    return (firstCell >> firstShift) | (secondCell << secondShift);
 }
 
 // запись 0xAB по адресу 0x0
@@ -179,13 +191,64 @@ void Memory::write32(std::uint32_t address, std::uint32_t value) {
     checkRange(address, 4);
 
     const std::size_t firstCellIndex = address >> cellShift;
-    const std::size_t lastCellIndex = (static_cast<std::size_t>(address) + 3) >> cellShift;
+    const std::size_t byteIndex = address & cellMask;
+
+    if (byteIndex == 0) {
+        // выровненная запись меняет одну ячейку, поэтому можно не раскладывать value по байтам
+        const std::uint32_t blockIndex = blockIndexForAddress(address);
+        const std::size_t blockOffset = blockOffsetForAddress(address);
+        Block& block = getOrCreateBlock(blockIndex);
+        const std::size_t cellIndexInBlock = blockOffset >> cellShift;
+        // oldData нужен только для трассировки, без callback лишнее чтение старого значения не делаем
+        const std::uint32_t firstOldData = cellWriteHandler_ ? block.cells[cellIndexInBlock] : 0;
+
+        block.cells[cellIndexInBlock] = value;
+        markInitializedInBlock(block, blockOffset, 4);
+
+        if (cellWriteHandler_) {
+            cellWriteHandler_(
+                static_cast<std::uint32_t>(firstCellIndex * cellSize),
+                firstOldData,
+                value
+            );
+        }
+        return;
+    }
+
+    // невыровненная запись 32 бит меняет две соседние 4-байтовые ячейки
+    const std::size_t lastCellIndex = firstCellIndex + 1;
     const std::uint32_t firstOldData = readCellUnchecked(firstCellIndex);
     const std::uint32_t lastOldData = readCellUnchecked(lastCellIndex);
 
-    writeUnchecked(address, value, 4);
+    const std::size_t firstShift = byteIndex * 8;
+    const std::uint32_t firstMask = ~std::uint32_t{0} << firstShift;
+    // первая маска сохраняет байты ячейки до адреса записи и заменяет хвост ячейки
+    const std::uint32_t firstNewData =
+        (firstOldData & ~firstMask) | ((value << firstShift) & firstMask);
+
+    const std::size_t firstByteCount = cellSize - byteIndex;
+    const std::size_t secondByteCount = byteIndex;
+    const std::uint32_t secondMask =
+        (std::uint32_t{1} << (secondByteCount * 8)) - 1u;
+    // вторая маска заменяет начало следующей ячейки оставшимися байтами value
+    const std::uint32_t secondNewData =
+        (lastOldData & ~secondMask) | ((value >> (firstByteCount * 8)) & secondMask);
+
+    writeCellUnchecked(firstCellIndex, firstNewData);
+    writeCellUnchecked(lastCellIndex, secondNewData);
     markInitialized(address, 4);
-    notifyCellWrites(firstCellIndex, firstOldData, lastCellIndex, lastOldData);
+    if (cellWriteHandler_) {
+        cellWriteHandler_(
+            static_cast<std::uint32_t>(firstCellIndex * cellSize),
+            firstOldData,
+            firstNewData
+        );
+        cellWriteHandler_(
+            static_cast<std::uint32_t>(lastCellIndex * cellSize),
+            lastOldData,
+            secondNewData
+        );
+    }
 }
 
 std::size_t Memory::size() const noexcept {
@@ -202,10 +265,6 @@ void Memory::setUninitReadHandler(UninitReadHandler handler) {
     cellReadHandler_ = std::move(handler);
 }
 
-void Memory::checkAddress(std::uint32_t address) const {
-    checkRange(address, 1);
-}
-
 void Memory::checkRange(std::uint32_t address, std::size_t accessSize) const {
     // не считаем address + accessSize напрямую, чтобы не получить переполнение
     if (accessSize > size_ || static_cast<std::size_t>(address) > size_ - accessSize) [[unlikely]] {
@@ -214,11 +273,22 @@ void Memory::checkRange(std::uint32_t address, std::size_t accessSize) const {
 }
 
 void Memory::markInitialized(std::uint32_t address, std::size_t byteCount) {
-    // факт записи важнее значения: даже запись нуля делает байт инициализированным
-    for (std::size_t i = 0; i < byteCount; ++i) {
-        const std::uint32_t currentAddress = address + static_cast<std::uint32_t>(i);
-        Block& block = getOrCreateBlock(blockIndexForAddress(currentAddress));
-        block.initialized.set(blockOffsetForAddress(currentAddress));
+    std::size_t marked = 0;
+    while (marked < byteCount) {
+        // факт записи важнее значения: даже запись нуля делает байт инициализированным
+        const std::uint32_t currentAddress = address + static_cast<std::uint32_t>(marked);
+        const std::size_t blockOffset = blockOffsetForAddress(currentAddress);
+        const std::size_t bytesLeft = byteCount - marked;
+        const std::size_t bytesInBlock =
+            bytesLeft < blockSize - blockOffset ? bytesLeft : blockSize - blockOffset;
+
+        markInitializedInBlock(
+            getOrCreateBlock(blockIndexForAddress(currentAddress)),
+            blockOffset,
+            bytesInBlock
+        );
+
+        marked += bytesInBlock;
     }
 }
 
@@ -255,13 +325,19 @@ void Memory::notifyUninitRead(std::uint32_t address, std::size_t byteCount) cons
 }
 
 std::uint32_t Memory::readCellUnchecked(std::size_t cellIndex) const {
-    const std::uint32_t blockIndex = static_cast<std::uint32_t>(cellIndex / cellsPerBlock);
+    const std::uint32_t blockIndex = static_cast<std::uint32_t>(cellIndex >> cellsPerBlockShift);
     const Block* block = findBlock(blockIndex);
     if (block == nullptr) {
         return 0;
     }
 
     return block->cells[cellIndex & (cellsPerBlock - 1)];
+}
+
+void Memory::writeCellUnchecked(std::size_t cellIndex, std::uint32_t value) {
+    const std::uint32_t blockIndex = static_cast<std::uint32_t>(cellIndex >> cellsPerBlockShift);
+    Block& block = getOrCreateBlock(blockIndex);
+    block.cells[cellIndex & (cellsPerBlock - 1)] = value;
 }
 
 Memory::Block& Memory::getOrCreateBlock(std::uint32_t blockIndex) {
@@ -283,6 +359,33 @@ std::uint32_t Memory::blockIndexForAddress(std::uint32_t address) noexcept {
 
 std::size_t Memory::blockOffsetForAddress(std::uint32_t address) noexcept {
     return address & blockMask;
+}
+
+std::uint8_t Memory::readByteFromBlock(const Block& block, std::size_t blockOffset) noexcept {
+    // blockOffset уже относится к конкретному блоку, поэтому здесь остается только выбрать ячейку и байт
+    const std::size_t cellIndex = blockOffset >> cellShift;
+    const std::size_t byteIndex = blockOffset & cellMask;
+    const std::size_t shift = byteIndex * 8; // количество сдвигов вправо для получения нужного байта
+
+    return static_cast<std::uint8_t>((block.cells[cellIndex] >> shift) & byteMask);
+}
+
+void Memory::writeByteToBlock(Block& block, std::size_t blockOffset, std::uint8_t value) noexcept {
+    // запись байта не трогает остальные байты той же 4-байтовой ячейки
+    const std::size_t cellIndex = blockOffset >> cellShift;
+    const std::size_t byteIndex = blockOffset & cellMask;
+    const std::size_t shift = byteIndex * 8;
+    const std::uint32_t mask = byteMask << shift; // маска байта, который нужно заменить внутри 4-байтовой ячейки
+
+    block.cells[cellIndex] = (block.cells[cellIndex] & ~mask) |
+                             (static_cast<std::uint32_t>(value) << shift);
+}
+
+void Memory::markInitializedInBlock(Block& block, std::size_t blockOffset, std::size_t byteCount) {
+    // сюда передается диапазон, который точно лежит внутри одного блока
+    for (std::size_t i = 0; i < byteCount; ++i) {
+        block.initialized.set(blockOffset + i);
+    }
 }
 
 }

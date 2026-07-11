@@ -108,8 +108,12 @@ void Emulator::collectRamWriteTrace(
         return;
     }
 
-    // фильтры применяются при сборе события, чтобы не хранить лишние записи
-    if (!tickRangeFilter_.contains(tick_) || !ramWriteAddressFilter_.contains(cellAddress)) {
+    const std::uint32_t cellEndAddress =
+        cellAddress + static_cast<std::uint32_t>(Memory::cellSize - 1);
+
+    // фильтр адресов смотрит на пересечение с байтами ячейки, а не только на адрес начала ячейки
+    if (!tickRangeFilter_.contains(tick_) ||
+        !ramWriteAddressFilter_.intersects(cellAddress, cellEndAddress)) {
         return;
     }
 

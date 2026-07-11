@@ -18,6 +18,16 @@ public:
     static_assert(blockSize > 0);
     static_assert((blockSize & (blockSize - 1)) == 0, "blockSize must be power of two");
 
+    static constexpr std::size_t cellSize = 4;
+    static_assert(cellSize > 0);
+    static_assert((cellSize & (cellSize - 1)) == 0, "cellSize must be power of two");
+    static_assert(blockSize % cellSize == 0, "blockSize must be a multiple of cellSize");
+
+    static constexpr std::size_t cellsPerBlock = blockSize / cellSize;
+
+    static_assert(cellsPerBlock > 0);
+    static_assert((cellsPerBlock & (cellsPerBlock - 1)) == 0, "cellsPerBlock must be power of two");
+
     // обработчик нужен для трассировки изменения 4-байтовых ячеек памяти
     using CellWriteHandler = std::function<void(
         std::uint32_t cellAddress,
@@ -51,15 +61,6 @@ public:
     void setUninitReadHandler(UninitReadHandler handler);
 
 private:
-    static constexpr std::size_t cellSize = 4;
-    static_assert(cellSize > 0);
-    static_assert((cellSize & (cellSize - 1)) == 0, "cellSize must be power of two");
-    static_assert(blockSize % cellSize == 0, "blockSize must be a multiple of cellSize");
-
-    static constexpr std::size_t cellsPerBlock = blockSize / cellSize;
-
-    static_assert(cellsPerBlock > 0);
-    static_assert((cellsPerBlock & (cellsPerBlock - 1)) == 0, "cellsPerBlock must be power of two");
 
     struct Block {
         std::array<std::uint32_t, cellsPerBlock> cells{};
@@ -79,16 +80,21 @@ private:
         std::uint32_t lastOldData
     );
 
-    void checkAddress(std::uint32_t address) const;
     void checkRange(std::uint32_t address, std::size_t size) const;
     void markInitialized(std::uint32_t address, std::size_t byteCount);
     std::uint8_t getUninitMask(std::uint32_t address, std::size_t byteCount) const;
     void notifyUninitRead(std::uint32_t address, std::size_t byteCount) const;
     std::uint32_t readCellUnchecked(std::size_t cellIndex) const;
+    void writeCellUnchecked(std::size_t cellIndex, std::uint32_t value);
     Block& getOrCreateBlock(std::uint32_t blockIndex);
     const Block* findBlock(std::uint32_t blockIndex) const;
     static std::uint32_t blockIndexForAddress(std::uint32_t address) noexcept;
     static std::size_t blockOffsetForAddress(std::uint32_t address) noexcept;
+
+    // эти функции работают с уже найденным блоком, чтобы не делать поиск в unordered_map на каждый байт
+    static std::uint8_t readByteFromBlock(const Block& block, std::size_t blockOffset) noexcept;
+    static void writeByteToBlock(Block& block, std::size_t blockOffset, std::uint8_t value) noexcept;
+    static void markInitializedInBlock(Block& block, std::size_t blockOffset, std::size_t byteCount);
 
 private:
     // память хранится блоками по 4кб, чтобы большой объем RAM не выделялся сразу

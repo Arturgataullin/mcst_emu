@@ -41,7 +41,7 @@ public:
     void step();
 
     const std::array<std::uint32_t, common::registerCount>& registers() const noexcept;
-    std::uint32_t pc() const noexcept;
+    std::uint64_t pc() const noexcept;
     bool isFinished() const noexcept;
 
     std::string dumpRegisters() const;
@@ -98,9 +98,9 @@ private:
     std::uint32_t assemblerTempRegister_ = 0;
     Memory memory_;
 
-    std::uint32_t pc_ = common::resetAddress;
+    std::uint64_t pc_ = common::resetAddress;
     std::uint32_t programBase_ = common::resetAddress;
-    std::uint32_t programEnd_ = common::resetAddress;
+    std::uint64_t programEnd_ = common::resetAddress;
     std::uint64_t tick_ = 0;
     std::ostream* uninitRamWarningOutput_ = nullptr;
 

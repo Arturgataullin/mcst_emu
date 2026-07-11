@@ -116,6 +116,26 @@ TEST_CASE("memory load stores bytes at base address") {
     REQUIRE(memory.read8(19) == 0x80);
 }
 
+TEST_CASE("memory load supports sparse block boundary") {
+    emulator::Memory memory(emulator::Memory::blockSize * 2);
+    std::vector<UninitReadEvent> events;
+
+    memory.setUninitReadHandler([&events](
+        std::uint32_t address,
+        std::size_t size,
+        std::uint8_t mask
+    ) {
+        events.push_back({address, size, mask});
+    });
+
+    const std::uint32_t address = static_cast<std::uint32_t>(emulator::Memory::blockSize - 2);
+
+    memory.load({0xAA, 0xBB, 0xCC, 0xDD}, address);
+
+    REQUIRE(memory.read32(address) == 0xDDCCBBAA);
+    REQUIRE(events.empty());
+}
+
 TEST_CASE("memory read32 reconstructs instruction word in expected byte order") {
     emulator::Memory memory;
     memory.clear();
