@@ -18,13 +18,15 @@ enum class OptionName {
     TraceTicks,
     RamSize,
     TraceRamAddresses,
-    Warn
+    Warn,
+    Help
 };
 
 struct OptionSpec {
     std::string_view prefix;
     OptionName name;
     std::string_view displayName;
+    bool requiresValue;
 };
 
 struct ParsedOption {
@@ -35,26 +37,36 @@ struct ParsedOption {
 
 // чтобы добавить новую опцию, достаточно добавить ее сюда и обработчик в switch ниже
 constexpr std::array optionSpecs = {
-    OptionSpec{"--trace=", OptionName::Trace, "--trace"},
-    OptionSpec{"--trace-ticks=", OptionName::TraceTicks, "--trace-ticks"},
-    OptionSpec{"--ram-size=", OptionName::RamSize, "--ram-size"},
-    OptionSpec{"--trace-ram-addrs=", OptionName::TraceRamAddresses, "--trace-ram-addrs"},
-    OptionSpec{"--warn=", OptionName::Warn, "--warn"},
+    OptionSpec{"--trace=", OptionName::Trace, "--trace", true},
+    OptionSpec{"--trace-ticks=", OptionName::TraceTicks, "--trace-ticks", true},
+    OptionSpec{"--ram-size=", OptionName::RamSize, "--ram-size", true},
+    OptionSpec{"--trace-ram-addrs=", OptionName::TraceRamAddresses, "--trace-ram-addrs", true},
+    OptionSpec{"--warn=", OptionName::Warn, "--warn", true},
+    OptionSpec{"--help", OptionName::Help, "--help", false}
 };
 
 constexpr std::size_t optionIndex(OptionName name) noexcept {
     return static_cast<std::size_t>(name);
 }
 
-constexpr std::size_t optionCount = optionIndex(OptionName::Warn) + 1;
+constexpr std::size_t optionCount = optionIndex(OptionName::Help) + 1;
+static_assert(optionSpecs.size() == optionCount);
 
 // определяет только имя опции и отделяет значение после '=', само значение парсится отдельно
 std::optional<ParsedOption> parseOption(std::string_view argument) {
     for (const OptionSpec& spec : optionSpecs) {
-        if (argument.starts_with(spec.prefix)) {
+        if (spec.requiresValue && argument.starts_with(spec.prefix)) {
             return ParsedOption{
                 spec.name,
                 argument.substr(spec.prefix.size()),
+                spec.displayName
+            };
+        }
+
+        if (!spec.requiresValue && argument == spec.prefix) {
+            return ParsedOption{
+                spec.name,
+                {},
                 spec.displayName
             };
         }
@@ -190,6 +202,10 @@ void validateOptions(
     bool traceTicksSeen,
     bool traceRamAddressesSeen
 ) {
+    if (options.isNeedHelp) {
+        return;
+    }
+
     if (options.inputPath.empty()) {
         throw std::invalid_argument("input file is not specified");
     }
@@ -232,6 +248,9 @@ CommandLineOptions parseCommandLine(int argc, char* argv[]) {
 
             // после определения имени опции дальше работает только парсер ее значения
             switch (parsed->name) {
+                case OptionName::Help:
+                    options.isNeedHelp = true;
+                    break;
                 case OptionName::Trace:
                     parseTraceModes(options.trace, parsed->value);
                     break;

@@ -31,6 +31,7 @@ struct CommandLineOptions {
     std::size_t ramSize = common::opMemorySize;
     TraceOptions trace;
     WarningOptions warnings;
+    bool isNeedHelp = false;
 };
 
 CommandLineOptions parseCommandLine(int argc, char* argv[]);
