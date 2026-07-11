@@ -158,16 +158,9 @@ void Emulator::writeDisasmTrace(
     std::uint32_t address,
     std::uint32_t encoding,
     const DecodedInstruction& instruction,
-    const StateSnapshot& before
+    const TraceSnapshot& before
 ) const {
     // приёмник читается после execute(), а источники - из снимка до execute()
-    const auto readBefore = [&before](std::uint8_t reg) {
-        if (reg == common::assemblerTempRegister) {
-            return before.tempRegister;
-        }
-        return before.registers[reg];
-    };
-
     // использую основной поток вывода, но сохраняю его состояние и флаги
     std::ostream& out = *traceOutput_;
     StreamStateGuard guard(out);
@@ -210,8 +203,8 @@ void Emulator::writeDisasmTrace(
         case common::Opcode::UDIV:
         case common::Opcode::SDIV:
             writeRegisterOperand(out, instruction.a, readRegister(instruction.a));
-            writeRegisterOperand(out, instruction.b, readBefore(instruction.b));
-            writeRegisterOperand(out, instruction.c, readBefore(instruction.c));
+            writeRegisterOperand(out, instruction.b, before.b);
+            writeRegisterOperand(out, instruction.c, before.c);
             break;
 
         // для формата opcode a b i поле c печатается как imm8, а не как регистр
@@ -219,22 +212,22 @@ void Emulator::writeDisasmTrace(
         case common::Opcode::LDH:
         case common::Opcode::LDW:
             writeRegisterOperand(out, instruction.a, readRegister(instruction.a));
-            writeRegisterOperand(out, instruction.b, readBefore(instruction.b));
+            writeRegisterOperand(out, instruction.b, before.b);
             out << " imm (0x" << std::hex << static_cast<unsigned>(instruction.c) << ')';
             break;
 
         case common::Opcode::STB:
         case common::Opcode::STH:
         case common::Opcode::STW:
-            writeRegisterOperand(out, instruction.a, readBefore(instruction.a));
-            writeRegisterOperand(out, instruction.b, readBefore(instruction.b));
+            writeRegisterOperand(out, instruction.a, before.a);
+            writeRegisterOperand(out, instruction.b, before.b);
             out << " imm (0x" << std::hex << static_cast<unsigned>(instruction.c) << ')';
             break;
 
         case common::Opcode::SXT:
         case common::Opcode::BSWAP:
             writeRegisterOperand(out, instruction.a, readRegister(instruction.a));
-            writeRegisterOperand(out, instruction.b, readBefore(instruction.b));
+            writeRegisterOperand(out, instruction.b, before.b);
             out << " imm (0x" << std::hex << static_cast<unsigned>(instruction.c) << ')';
             break;
     }

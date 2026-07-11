@@ -67,10 +67,11 @@ private:
     void writeUninitRamWarning(std::uint32_t address, std::size_t byteCount, std::uint8_t uninitMask) const;
 
 #if MCST_TRACING
-    // снимок нужен для вывода исходных значений регистров-источников
-    struct StateSnapshot {
-        std::array<std::uint32_t, common::registerCount> registers{};
-        std::uint32_t tempRegister = 0;
+    // снимок хранит только значения операндов текущей инструкции, а не весь файл регистров
+    struct TraceSnapshot {
+        std::uint32_t a = 0;
+        std::uint32_t b = 0;
+        std::uint32_t c = 0;
     };
 
     void writeDisasmTrace(
@@ -78,7 +79,7 @@ private:
         std::uint32_t address,
         std::uint32_t encoding,
         const DecodedInstruction& instruction,
-        const StateSnapshot& before
+        const TraceSnapshot& before
     ) const;
 
     struct RamWriteTraceEvent {
@@ -88,6 +89,7 @@ private:
         std::uint32_t newData = 0;
     };
 
+    TraceSnapshot captureTraceSnapshot(const DecodedInstruction& instruction) const;
     void collectRamWriteTrace(std::uint32_t cellAddress, std::uint32_t oldData, std::uint32_t newData);
     void writeRamWriteTrace(const RamWriteTraceEvent& event) const;
     void flushRamWriteTrace();

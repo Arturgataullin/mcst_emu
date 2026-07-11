@@ -272,6 +272,59 @@ void Emulator::writeUninitRamWarning(
     out << '\n';
 }
 
+#if MCST_TRACING
+
+Emulator::TraceSnapshot Emulator::captureTraceSnapshot(const DecodedInstruction& instruction) const {
+    TraceSnapshot snapshot{};
+    const auto readIfValid = [this](std::uint8_t reg) {
+        // если регистр некорректный, execute() позже выдаст ошибку валидации, а trace не будет напечатан
+        if (reg >= common::registerCount && reg != common::assemblerTempRegister) {
+            return 0u;
+        }
+        return readRegister(reg);
+    };
+
+    switch (instruction.opcode) {
+        case common::Opcode::ADD:
+        case common::Opcode::SUB:
+        case common::Opcode::AND:
+        case common::Opcode::OR:
+        case common::Opcode::XOR:
+        case common::Opcode::SLL:
+        case common::Opcode::SRL:
+        case common::Opcode::SRA:
+        case common::Opcode::MUL:
+        case common::Opcode::UDIV:
+        case common::Opcode::SDIV:
+            snapshot.b = readIfValid(instruction.b);
+            snapshot.c = readIfValid(instruction.c);
+            break;
+
+        case common::Opcode::LDB:
+        case common::Opcode::LDH:
+        case common::Opcode::LDW:
+        case common::Opcode::SXT:
+        case common::Opcode::BSWAP:
+            snapshot.b = readIfValid(instruction.b);
+            break;
+
+        case common::Opcode::STB:
+        case common::Opcode::STH:
+        case common::Opcode::STW:
+            snapshot.a = readIfValid(instruction.a);
+            snapshot.b = readIfValid(instruction.b);
+            break;
+
+        case common::Opcode::LI:
+        case common::Opcode::LUI:
+            break;
+    }
+
+    return snapshot;
+}
+
+#endif
+
 void Emulator::execute(const DecodedInstruction& instruction) {
     auto advancePc = [this]() {
         pc_ += common::instructionSizeBytes;
@@ -484,11 +537,10 @@ void Emulator::step() {
         traceOutput_ != nullptr &&
         tickRangeFilter_.contains(currentTick);
 
-    StateSnapshot before{};
+    TraceSnapshot before{};
     if (emitDisasmTrace) {
         // источники должны выводиться со значениями до исполнения команды
-        before.registers = registers_;
-        before.tempRegister = assemblerTempRegister_;
+        before = captureTraceSnapshot(instruction);
     }
 #endif
 

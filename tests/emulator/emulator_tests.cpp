@@ -631,6 +631,26 @@ TEST_CASE("trace reads aliased source operands from pre-instruction state") {
     );
 }
 
+TEST_CASE("trace reads aliased memory base register from pre-instruction state") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x40, 0x00, // LI R0 64
+        0x10, 0x00, 0x00, 0x00  // LDB R0 R0 0
+    };
+
+    std::ostringstream trace;
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.enableDisasmTrace(trace);
+    emulator.setTraceTicks({{1, 1}});
+    emulator.run();
+
+    REQUIRE(
+        trace.str() ==
+        "---- 1 0x4 ----\n"
+        "0x00000010 LDB R0 (0x0) R0 (0x40) imm (0x0)\n"
+    );
+}
+
 TEST_CASE("emulator writes RAM trace for aligned STW") {
     const std::vector<std::uint8_t> program = {
         0x00, 0x00, 0x40, 0x00, // LI R0 64
