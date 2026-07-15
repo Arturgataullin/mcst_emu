@@ -116,6 +116,111 @@ std::uint32_t Encoder::encodeInstruction(const Instruction& instruction) const {
             word |= static_cast<std::uint32_t>(imm) << 24;
             return word;
         }
+        case common::Operation::SCRW: {
+            if (instruction.operands.size() != 2) {
+                fail(instruction.location, "SCRW expects 2 operands");
+            }
+
+            const std::uint8_t scr = requireStatusRegister(
+                instruction.operands[0],
+                instruction.location,
+                "status register"
+            );
+            const std::uint8_t source = requireRegister(
+                instruction.operands[1],
+                instruction.location,
+                "source register"
+            );
+
+            // byte0 = opcode
+            // byte1 = SCRi
+            // byte2 = Rb
+            // byte3 = 0
+            std::uint32_t word = 0;
+            word |= static_cast<std::uint32_t>(common::Opcode::SCRW);
+            word |= static_cast<std::uint32_t>(scr) << 8;
+            word |= static_cast<std::uint32_t>(source) << 16;
+            return word;
+        }
+        case common::Operation::SCRR: {
+            if (instruction.operands.size() != 2) {
+                fail(instruction.location, "SCRR expects 2 operands");
+            }
+
+            const std::uint8_t destination = requireRegister(
+                instruction.operands[0],
+                instruction.location,
+                "destination register"
+            );
+            const std::uint8_t scr = requireStatusRegister(
+                instruction.operands[1],
+                instruction.location,
+                "status register"
+            );
+
+            // byte0 = opcode
+            // byte1 = Ra
+            // byte2 = SCRi
+            // byte3 = 0
+            std::uint32_t word = 0;
+            word |= static_cast<std::uint32_t>(common::Opcode::SCRR);
+            word |= static_cast<std::uint32_t>(destination) << 8;
+            word |= static_cast<std::uint32_t>(scr) << 16;
+            return word;
+        }
+        case common::Operation::ASPI: {
+            if (instruction.operands.size() != 2) {
+                fail(instruction.location, "ASPI expects 2 operands");
+            }
+
+            const std::uint8_t destination = requireRegister(
+                instruction.operands[0],
+                instruction.location,
+                "destination register"
+            );
+            const std::uint16_t immediate = requireImmediate(
+                instruction.operands[1],
+                instruction.location,
+                "immediate"
+            );
+
+            // byte0 = opcode
+            // byte1 = Ra
+            // byte2 = I0
+            // byte3 = I1
+            std::uint32_t word = 0;
+            word |= static_cast<std::uint32_t>(common::Opcode::ASPI);
+            word |= static_cast<std::uint32_t>(destination) << 8;
+            word |= static_cast<std::uint32_t>(immediate & 0x00FFu) << 16;
+            word |= static_cast<std::uint32_t>((immediate >> 8) & 0x00FFu) << 24;
+            return word;
+        }
+        case common::Operation::ASPR: {
+            if (instruction.operands.size() != 2) {
+                fail(instruction.location, "ASPR expects 2 operands");
+            }
+
+            const std::uint8_t destination = requireRegister(
+                instruction.operands[0],
+                instruction.location,
+                "destination register"
+            );
+            const std::uint8_t source = requireRegister(
+                instruction.operands[1],
+                instruction.location,
+                "source register"
+            );
+
+            // byte0 = opcode
+            // byte1 = Ra
+            // byte2 = Rb
+            // byte3 = 0
+            std::uint32_t word = 0;
+            word |= static_cast<std::uint32_t>(common::Opcode::ASPR);
+            word |= static_cast<std::uint32_t>(destination) << 8;
+            word |= static_cast<std::uint32_t>(source) << 16;
+            return word;
+        }
         default:
             fail(instruction.location, "unknown operation during encoding");
     }
@@ -127,6 +232,27 @@ std::uint8_t Encoder::requireRegister(const Operand& operand, const SourceLocati
     }
 
     return std::get<RegisterOperand>(operand).number;
+}
+
+std::uint8_t Encoder::requireStatusRegister(
+    const Operand& operand,
+    const SourceLocation& location,
+    const char* operandName
+) const {
+    if (!std::holds_alternative<StatusRegisterOperand>(operand)) {
+        fail(location, std::string(operandName) + " must be a status register");
+    }
+
+    // Operand можно создать напрямую, поэтому допустимость enum проверяется и после parser
+    const common::StatusRegister reg = std::get<StatusRegisterOperand>(operand).reg;
+    switch (reg) {
+        case common::StatusRegister::SpTop:
+        case common::StatusRegister::SpSize:
+        case common::StatusRegister::SpBottom:
+            return common::statusRegisterIndex(reg);
+    }
+
+    fail(location, std::string(operandName) + " has invalid index");
 }
 
 std::uint16_t Encoder::requireImmediate(const Operand& operand, const SourceLocation& location, const char* operandName) const {

@@ -49,6 +49,11 @@ namespace common {
         STW,
         SXT,
         BSWAP,
+        // команды доступа к SCR и изменения указателя стека
+        SCRW,
+        SCRR,
+        ASPI,
+        ASPR,
         // pseudo commands
         MOV,
         NEG,
@@ -77,12 +82,30 @@ namespace common {
         STH = 0x14,
         STW = 0x15,
         SXT = 0x16,
-        BSWAP = 0x17
+        BSWAP = 0x17,
+        // диапазон 0x20-0x23 выделен под управление SCR и стеком
+        SCRW = 0x20,
+        SCRR = 0x21,
+        ASPI = 0x22,
+        ASPR = 0x23
+    };
+
+    // индекс является частью машинной кодировки операнда SCR
+    enum class StatusRegister : std::uint8_t {
+        SpTop = 1,
+        SpSize = 2,
+        SpBottom = 3 // исходный верхний адрес 
     };
 
     [[nodiscard]] std::optional<Operation> operationFromString(std::string_view lexeme);
+    [[nodiscard]] std::optional<StatusRegister> statusRegisterFromString(std::string_view lexeme);
     [[nodiscard]] std::string_view toString(Operation op);
     [[nodiscard]] std::string_view toString(Opcode opcode);
+    [[nodiscard]] std::string_view toString(StatusRegister reg);
     [[nodiscard]] Opcode opcodeForOperation(Operation op);
+
+    [[nodiscard]] constexpr std::uint8_t statusRegisterIndex(StatusRegister reg) noexcept {
+        return static_cast<std::uint8_t>(reg);
+    }
 
 }

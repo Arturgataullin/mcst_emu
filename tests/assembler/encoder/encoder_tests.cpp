@@ -4,6 +4,7 @@
 #include "encoder.h"
 
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 using Catch::Matchers::ContainsSubstring;
@@ -17,6 +18,7 @@ using assembler::Operand;
 using assembler::Program;
 using assembler::RegisterOperand;
 using assembler::SourceLocation;
+using assembler::StatusRegisterOperand;
 
 Instruction makeLi(std::uint8_t rd, std::uint16_t imm, std::size_t line = 1, std::size_t column = 1) {
     Instruction inst;
@@ -160,6 +162,18 @@ Instruction makeRegisterImmediate(
     inst.operands.push_back(RegisterOperand{ra});
     inst.operands.push_back(RegisterOperand{rb});
     inst.operands.push_back(ImmediateOperand{imm});
+    return inst;
+}
+
+Instruction makeStackInstruction(
+    common::Operation operation,
+    Operand first,
+    Operand second
+) {
+    Instruction inst;
+    inst.operation = operation;
+    inst.operands.push_back(std::move(first));
+    inst.operands.push_back(std::move(second));
     return inst;
 }
 
@@ -389,6 +403,40 @@ TEST_CASE("encoder encodes memory-format instructions") {
     REQUIRE(bytes == expected);
 }
 
+TEST_CASE("encoder encodes stack instructions") {
+    Program program;
+    program.instructions.push_back(makeStackInstruction(
+        common::Operation::SCRW,
+        StatusRegisterOperand{common::StatusRegister::SpTop},
+        RegisterOperand{5}
+    ));
+    program.instructions.push_back(makeStackInstruction(
+        common::Operation::SCRR,
+        RegisterOperand{5},
+        StatusRegisterOperand{common::StatusRegister::SpTop}
+    ));
+    program.instructions.push_back(makeStackInstruction(
+        common::Operation::ASPI,
+        RegisterOperand{5},
+        ImmediateOperand{0xfff0}
+    ));
+    program.instructions.push_back(makeStackInstruction(
+        common::Operation::ASPR,
+        RegisterOperand{5},
+        RegisterOperand{6}
+    ));
+
+    const std::vector<std::uint8_t> bytes = Encoder{}.encode(program);
+    const std::vector<std::uint8_t> expected = {
+        0x20, 0x01, 0x05, 0x00,
+        0x21, 0x05, 0x01, 0x00,
+        0x22, 0x05, 0xf0, 0xff,
+        0x23, 0x05, 0x06, 0x00
+    };
+
+    REQUIRE(bytes == expected);
+}
+
 TEST_CASE("encoder encodes full sample program") {
     Program program;
     program.instructions.push_back(makeLi(0, 0x0001));
@@ -595,6 +643,48 @@ TEST_CASE("encoder rejects memory-format instruction with immediate larger than 
     REQUIRE_THROWS_WITH(
         encoder.encode(program),
         ContainsSubstring("immediate must fit into 8 bits")
+    );
+}
+
+TEST_CASE("encoder rejects invalid status register index") {
+    Program program;
+    program.instructions.push_back(makeStackInstruction(
+        common::Operation::SCRW,
+        StatusRegisterOperand{static_cast<common::StatusRegister>(6)},
+        RegisterOperand{5}
+    ));
+
+    REQUIRE_THROWS_WITH(
+        Encoder{}.encode(program),
+        ContainsSubstring("status register has invalid index")
+    );
+}
+
+TEST_CASE("encoder rejects ASPI immediate larger than 16 bits") {
+    Program program;
+    program.instructions.push_back(makeStackInstruction(
+        common::Operation::ASPI,
+        RegisterOperand{5},
+        ImmediateOperand{0x10000}
+    ));
+
+    REQUIRE_THROWS_WITH(
+        Encoder{}.encode(program),
+        ContainsSubstring("immediate must fit into 16 bits")
+    );
+}
+
+TEST_CASE("encoder rejects stack instruction with wrong operand count") {
+    Instruction instruction;
+    instruction.operation = common::Operation::ASPR;
+    instruction.operands.push_back(RegisterOperand{5});
+
+    Program program;
+    program.instructions.push_back(std::move(instruction));
+
+    REQUIRE_THROWS_WITH(
+        Encoder{}.encode(program),
+        ContainsSubstring("ASPR expects 2 operands")
     );
 }
 

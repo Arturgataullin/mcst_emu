@@ -60,7 +60,7 @@ std::vector<Token> Lexer::tokenize() {
             tokens.push_back(lexNumber());
         } 
         else if (isWordStart(ch)) {
-            tokens.push_back(lexOperationOrRegister());
+            tokens.push_back(lexWord());
         } 
         else if (isNewLine(ch, next_ch)) {
             advance();
@@ -75,7 +75,7 @@ std::vector<Token> Lexer::tokenize() {
     return tokens;
 }
 
-Token Lexer::lexOperationOrRegister() {
+Token Lexer::lexWord() {
     const SourceLocation location{line_, column_};
     const std::size_t start = pos_;
 
@@ -92,6 +92,15 @@ Token Lexer::lexOperationOrRegister() {
             .lexeme = upperLexeme,
             .location = location,
             .numberValue = *regIndex
+        };
+    }
+    // имя SCR сразу преобразуется в архитектурный индекс и хранится аналогично номеру обычного регистра
+    else if (const auto statusRegister = common::statusRegisterFromString(upperLexeme)) {
+        return Token{
+            .type = TokenType::StatusRegister,
+            .lexeme = upperLexeme,
+            .location = location,
+            .numberValue = common::statusRegisterIndex(*statusRegister)
         };
     }
     else if (isOperationLike(upperLexeme)) {

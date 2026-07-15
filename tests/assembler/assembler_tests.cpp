@@ -66,6 +66,34 @@ TEST_CASE("assembler assembles sample program into expected bytes") {
     REQUIRE(bytes == expected);
 }
 
+TEST_CASE("assembler assembles stack instructions into expected bytes") {
+    const TemporaryDirectory temp("assembler_tests_stack_instructions");
+    const fs::path& tempDir = temp.path();
+
+    const fs::path inputPath = tempDir / "stack.s";
+    const fs::path outputPath = tempDir / "stack.o";
+
+    const std::string source =
+        "SCRW SP_TOP R5\n"
+        "SCRR R5 SP_TOP\n"
+        "ASPI R5 0xfff0\n"
+        "ASPR R5 R6\n";
+
+    writeTextFile(inputPath, source);
+
+    assembler::Assembler{}.assembleFile(inputPath.string(), outputPath.string());
+
+    const std::vector<std::uint8_t> bytes = readBinaryFile(outputPath);
+    const std::vector<std::uint8_t> expected = {
+        0x20, 0x01, 0x05, 0x00,
+        0x21, 0x05, 0x01, 0x00,
+        0x22, 0x05, 0xf0, 0xff,
+        0x23, 0x05, 0x06, 0x00
+    };
+
+    REQUIRE(bytes == expected);
+}
+
 TEST_CASE("assembler assembles single LI instruction") {
     const TemporaryDirectory temp("assembler_tests_assemble_single_li");
     const fs::path& tempDir = temp.path();

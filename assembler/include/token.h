@@ -11,6 +11,7 @@ namespace assembler {
 enum class TokenType {
     Operation,
     Register,
+    StatusRegister,
     Number,
     NewLine,
     EndOfFile

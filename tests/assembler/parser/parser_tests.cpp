@@ -19,6 +19,7 @@ using assembler::Parser;
 using assembler::Program;
 using assembler::RegisterOperand;
 using assembler::SourceLocation;
+using assembler::StatusRegisterOperand;
 using assembler::Token;
 using assembler::TokenType;
 
@@ -44,6 +45,21 @@ Token num(std::string lexeme, std::int64_t value, std::size_t line = 1, std::siz
     return makeToken(TokenType::Number, std::move(lexeme), line, column, value);
 }
 
+Token scr(
+    std::string lexeme,
+    common::StatusRegister statusRegister,
+    std::size_t line = 1,
+    std::size_t column = 1
+) {
+    return makeToken(
+        TokenType::StatusRegister,
+        std::move(lexeme),
+        line,
+        column,
+        common::statusRegisterIndex(statusRegister)
+    );
+}
+
 Token nl(std::size_t line = 1, std::size_t column = 1) {
     return makeToken(TokenType::NewLine, "", line, column);
 }
@@ -58,6 +74,10 @@ const RegisterOperand& asRegister(const Operand& operand) {
 
 const ImmediateOperand& asImmediate(const Operand& operand) {
     return std::get<ImmediateOperand>(operand);
+}
+
+const StatusRegisterOperand& asStatusRegister(const Operand& operand) {
+    return std::get<StatusRegisterOperand>(operand);
 }
 
 }
@@ -518,6 +538,155 @@ TEST_CASE("parser lowers LFI into lower and upper loads and parses next instruct
     REQUIRE(program.instructions[2].operation == Operation::LI);
     REQUIRE(asRegister(program.instructions[2].operands[0]).number == 4);
     REQUIRE(asImmediate(program.instructions[2].operands[1]).value == 0x1234);
+}
+
+TEST_CASE("parser parses stack instructions") {
+    std::vector<Token> tokens = {
+        op("SCRW", 1, 1),
+        scr("SP_TOP", common::StatusRegister::SpTop, 1, 6),
+        reg("R5", 5, 1, 13),
+        nl(1, 15),
+        op("SCRR", 2, 1),
+        reg("R6", 6, 2, 6),
+        scr("SP_SIZE", common::StatusRegister::SpSize, 2, 9),
+        nl(2, 16),
+        op("ASPI", 3, 1),
+        reg("R7", 7, 3, 6),
+        num("0xfff0", 0xfff0, 3, 9),
+        nl(3, 15),
+        op("ASPR", 4, 1),
+        reg("R8", 8, 4, 6),
+        reg("R9", 9, 4, 9),
+        eof(4, 11)
+    };
+
+    Program program = Parser(std::move(tokens)).parseProgram();
+
+    REQUIRE(program.instructions.size() == 4);
+
+    const Instruction& scrw = program.instructions[0];
+    REQUIRE(scrw.operation == Operation::SCRW);
+    REQUIRE(scrw.operands.size() == 2);
+    CHECK(asStatusRegister(scrw.operands[0]).reg == common::StatusRegister::SpTop);
+    CHECK(asRegister(scrw.operands[1]).number == 5);
+
+    const Instruction& scrr = program.instructions[1];
+    REQUIRE(scrr.operation == Operation::SCRR);
+    REQUIRE(scrr.operands.size() == 2);
+    CHECK(asRegister(scrr.operands[0]).number == 6);
+    CHECK(asStatusRegister(scrr.operands[1]).reg == common::StatusRegister::SpSize);
+
+    const Instruction& aspi = program.instructions[2];
+    REQUIRE(aspi.operation == Operation::ASPI);
+    REQUIRE(aspi.operands.size() == 2);
+    CHECK(asRegister(aspi.operands[0]).number == 7);
+    CHECK(asImmediate(aspi.operands[1]).value == 0xfff0);
+
+    const Instruction& aspr = program.instructions[3];
+    REQUIRE(aspr.operation == Operation::ASPR);
+    REQUIRE(aspr.operands.size() == 2);
+    CHECK(asRegister(aspr.operands[0]).number == 8);
+    CHECK(asRegister(aspr.operands[1]).number == 9);
+}
+
+TEST_CASE("parser enforces stack instruction operand order") {
+    SECTION("SCRW expects status register first") {
+        Parser parser({
+            op("SCRW"),
+            reg("R5", 5, 1, 6),
+            scr("SP_TOP", common::StatusRegister::SpTop, 1, 9),
+            eof(1, 15)
+        });
+
+        REQUIRE_THROWS_WITH(
+            parser.parseProgram(),
+            ContainsSubstring("expected status register operand")
+        );
+    }
+
+    SECTION("SCRR expects general-purpose register first") {
+        Parser parser({
+            op("SCRR"),
+            scr("SP_TOP", common::StatusRegister::SpTop, 1, 6),
+            reg("R5", 5, 1, 13),
+            eof(1, 15)
+        });
+
+        REQUIRE_THROWS_WITH(
+            parser.parseProgram(),
+            ContainsSubstring("expected register operand")
+        );
+    }
+}
+
+TEST_CASE("parser rejects stack instruction with missing operand") {
+    Parser parser({
+        op("ASPR"),
+        reg("R5", 5, 1, 6),
+        eof(1, 8)
+    });
+
+    REQUIRE_THROWS_WITH(
+        parser.parseProgram(),
+        ContainsSubstring("expected register operand")
+    );
+}
+
+TEST_CASE("parser rejects stack instruction with extra operand") {
+    Parser parser({
+        op("ASPI"),
+        reg("R5", 5, 1, 6),
+        num("0xfff0", 0xfff0, 1, 9),
+        reg("R6", 6, 1, 16),
+        eof(1, 18)
+    });
+
+    REQUIRE_THROWS_WITH(
+        parser.parseProgram(),
+        ContainsSubstring("expected end of line after instruction")
+    );
+}
+
+TEST_CASE("parser rejects number instead of status register") {
+    Parser parser({
+        op("SCRW"),
+        num("0x1", 1, 1, 6),
+        reg("R5", 5, 1, 10),
+        eof(1, 12)
+    });
+
+    REQUIRE_THROWS_WITH(
+        parser.parseProgram(),
+        ContainsSubstring("expected status register operand")
+    );
+}
+
+TEST_CASE("parser rejects status register instead of general-purpose register") {
+    Parser parser({
+        op("ASPI"),
+        scr("SP_TOP", common::StatusRegister::SpTop, 1, 6),
+        num("0x1", 1, 1, 13),
+        eof(1, 16)
+    });
+
+    REQUIRE_THROWS_WITH(
+        parser.parseProgram(),
+        ContainsSubstring("expected register operand")
+    );
+}
+
+TEST_CASE("parser rejects ASPI immediate larger than 16 bits") {
+    Parser parser({
+        op("ASPI"),
+        reg("R5", 5, 1, 6),
+        num("0x10000", 0x10000, 1, 9),
+        eof(1, 16)
+    });
+
+    REQUIRE_THROWS_WITH(
+        parser.parseProgram(),
+        ContainsSubstring("immediate value is out of range")
+    );
 }
 
 TEST_CASE("parser rejects instruction with missing operand") {

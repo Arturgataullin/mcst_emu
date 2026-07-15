@@ -20,7 +20,12 @@ struct ImmediateOperand {
     std::uint32_t value = 0;
 };
 
-using Operand = std::variant<RegisterOperand, ImmediateOperand>;
+// отдельный тип не позволяет перепутать SCR с регистром общего назначения
+struct StatusRegisterOperand {
+    common::StatusRegister reg = common::StatusRegister::SpTop;
+};
+
+using Operand = std::variant<RegisterOperand, ImmediateOperand, StatusRegisterOperand>;
 
 struct Instruction {
     common::Operation operation{};
@@ -54,6 +59,7 @@ private:
 
     [[nodiscard]] RegisterOperand parseRegisterOperand();
     [[nodiscard]] ImmediateOperand parseImmediateOperand(std::uint64_t maxValue);
+    [[nodiscard]] StatusRegisterOperand parseStatusRegisterOperand();
 
     void expect(TokenType type, const std::string& message);
 

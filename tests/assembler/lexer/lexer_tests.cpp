@@ -1,8 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "lexer.h"
 
 using namespace assembler;
+using Catch::Matchers::ContainsSubstring;
 
 TEST_CASE("lexer returns only EOF for empty input") {
     Lexer lexer("");
@@ -471,6 +473,52 @@ TEST_CASE("lexer tokenizes multiple instructions") {
 
     CHECK(tokens[8].type == TokenType::NewLine);
     CHECK(tokens[9].type == TokenType::EndOfFile);
+}
+
+TEST_CASE("lexer tokenizes stack status registers") {
+    Lexer lexer("SP_TOP SP_SIZE SP_BOTTOM");
+    const auto tokens = lexer.tokenize();
+
+    REQUIRE(tokens.size() == 4);
+
+    CHECK(tokens[0].type == TokenType::StatusRegister);
+    CHECK(tokens[0].lexeme == "SP_TOP");
+    REQUIRE(tokens[0].numberValue.has_value());
+    CHECK(tokens[0].numberValue.value() == 1);
+
+    CHECK(tokens[1].type == TokenType::StatusRegister);
+    CHECK(tokens[1].lexeme == "SP_SIZE");
+    REQUIRE(tokens[1].numberValue.has_value());
+    CHECK(tokens[1].numberValue.value() == 2);
+
+    CHECK(tokens[2].type == TokenType::StatusRegister);
+    CHECK(tokens[2].lexeme == "SP_BOTTOM");
+    REQUIRE(tokens[2].numberValue.has_value());
+    CHECK(tokens[2].numberValue.value() == 3);
+
+    CHECK(tokens[3].type == TokenType::EndOfFile);
+}
+
+TEST_CASE("lexer rejects unknown stack status register") {
+    Lexer lexer("SP_BAD");
+
+    REQUIRE_THROWS_WITH(
+        lexer.tokenize(),
+        ContainsSubstring("unknown word 'SP_BAD'")
+    );
+}
+
+TEST_CASE("lexer still tokenizes all general-purpose registers") {
+    Lexer lexer("R0 R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R14 R15");
+    const auto tokens = lexer.tokenize();
+
+    REQUIRE(tokens.size() == 17);
+    for (std::size_t i = 0; i < 16; ++i) {
+        CHECK(tokens[i].type == TokenType::Register);
+        REQUIRE(tokens[i].numberValue.has_value());
+        CHECK(tokens[i].numberValue.value() == i);
+    }
+    CHECK(tokens[16].type == TokenType::EndOfFile);
 }
 
 TEST_CASE("lexer rejects invalid numeric literals") {

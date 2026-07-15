@@ -258,6 +258,24 @@ Instruction Parser::parseInstruction() {
             instruction.operands.push_back(parseRegisterOperand());
             instruction.operands.push_back(parseImmediateOperand(common::immediate8Max));
             break;
+        // в SCRW индекс SCR кодируется раньше регистра-источника, а в SCRR - после регистра-приемника
+        case common::Operation::SCRW:
+            instruction.operands.push_back(parseStatusRegisterOperand());
+            instruction.operands.push_back(parseRegisterOperand());
+            break;
+        case common::Operation::SCRR:
+            instruction.operands.push_back(parseRegisterOperand());
+            instruction.operands.push_back(parseStatusRegisterOperand());
+            break;
+        // литерал ASPI пока хранится как беззнаковое 16-битное значение; знаковая интерпретация выполняется эмулятором
+        case common::Operation::ASPI:
+            instruction.operands.push_back(parseRegisterOperand());
+            instruction.operands.push_back(parseImmediateOperand(common::immediate16Max));
+            break;
+        case common::Operation::ASPR:
+            instruction.operands.push_back(parseRegisterOperand());
+            instruction.operands.push_back(parseRegisterOperand());
+            break;
         case common::Operation::MOV:
         case common::Operation::NEG:
             instruction.operands.push_back(parseRegisterOperand());
@@ -314,6 +332,29 @@ ImmediateOperand Parser::parseImmediateOperand(std::uint64_t maxValue) {
         .value = static_cast<std::uint32_t>(val)
     };
     
+}
+
+StatusRegisterOperand Parser::parseStatusRegisterOperand() {
+    expect(TokenType::StatusRegister, "expected status register operand");
+
+    const Token token = advance();
+    if (!token.numberValue.has_value()) {
+        fail(token.location, "status register token does not contain register index");
+    }
+
+    // lexer сохраняет индекс в numberValue, но parser повторно проверяет допустимый набор SCR
+    const auto index = *token.numberValue;
+    if (index == common::statusRegisterIndex(common::StatusRegister::SpTop)) {
+        return StatusRegisterOperand{common::StatusRegister::SpTop};
+    }
+    if (index == common::statusRegisterIndex(common::StatusRegister::SpSize)) {
+        return StatusRegisterOperand{common::StatusRegister::SpSize};
+    }
+    if (index == common::statusRegisterIndex(common::StatusRegister::SpBottom)) {
+        return StatusRegisterOperand{common::StatusRegister::SpBottom};
+    }
+
+    fail(token.location, "status register index must be 1 or 2");
 }
 
 void Parser::expect(TokenType type, const std::string& message) {

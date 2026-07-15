@@ -65,6 +65,18 @@ namespace common {
         if (lexeme == "BSWAP") {
             return Operation::BSWAP;
         }
+        if (lexeme == "SCRW") {
+            return Operation::SCRW;
+        }
+        if (lexeme == "SCRR") {
+            return Operation::SCRR;
+        }
+        if (lexeme == "ASPI") {
+            return Operation::ASPI;
+        }
+        if (lexeme == "ASPR") {
+            return Operation::ASPR;
+        }
         if (lexeme == "MOV") {
             return Operation::MOV;
         }
@@ -78,6 +90,19 @@ namespace common {
             return Operation::LFI;
         }
 
+        return std::nullopt;
+    }
+
+    std::optional<StatusRegister> statusRegisterFromString(std::string_view lexeme) {
+        if (lexeme == "SP_TOP") {
+            return StatusRegister::SpTop;
+        }
+        if (lexeme == "SP_SIZE") {
+            return StatusRegister::SpSize;
+        }
+        if (lexeme == "SP_BOTTOM") {
+            return StatusRegister::SpBottom;
+        }
         return std::nullopt;
     }
 
@@ -104,6 +129,10 @@ namespace common {
             case Operation::STW:  return "STW";
             case Operation::SXT:  return "SXT";
             case Operation::BSWAP: return "BSWAP";
+            case Operation::SCRW: return "SCRW";
+            case Operation::SCRR: return "SCRR";
+            case Operation::ASPI: return "ASPI";
+            case Operation::ASPR: return "ASPR";
             case Operation::MOV:  return "MOV";
             case Operation::NEG:  return "NEG";
             case Operation::NOT: return "NOT";
@@ -136,6 +165,20 @@ namespace common {
             case Opcode::STW:  return "STW";
             case Opcode::SXT:  return "SXT";
             case Opcode::BSWAP: return "BSWAP";
+            case Opcode::SCRW: return "SCRW";
+            case Opcode::SCRR: return "SCRR";
+            case Opcode::ASPI: return "ASPI";
+            case Opcode::ASPR: return "ASPR";
+        }
+
+        return "UNKNOWN";
+    }
+
+    std::string_view toString(StatusRegister reg) {
+        switch (reg) {
+            case StatusRegister::SpTop: return "SP_TOP";
+            case StatusRegister::SpSize: return "SP_SIZE";
+            case StatusRegister::SpBottom: return "SP_BOTTOM";
         }
 
         return "UNKNOWN";
@@ -164,6 +207,10 @@ namespace common {
             case Operation::STW:  return Opcode::STW;
             case Operation::SXT:  return Opcode::SXT;
             case Operation::BSWAP: return Opcode::BSWAP;
+            case Operation::SCRW: return Opcode::SCRW;
+            case Operation::SCRR: return Opcode::SCRR;
+            case Operation::ASPI: return Opcode::ASPI;
+            case Operation::ASPR: return Opcode::ASPR;
             default:
                 throw std::logic_error("unknown operation");
         }

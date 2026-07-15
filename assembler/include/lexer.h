@@ -30,7 +30,7 @@ private:
     void skipComment() noexcept;
 
     [[nodiscard]] Token makeSimpleToken(TokenType type, std::string lexeme, SourceLocation location) const;
-    [[nodiscard]] Token lexOperationOrRegister();
+    [[nodiscard]] Token lexWord();
     [[nodiscard]] Token lexNumber();
 
     [[nodiscard]] std::uint64_t parseInteger(const std::string& lexeme, const SourceLocation& location);
