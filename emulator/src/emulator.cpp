@@ -10,6 +10,30 @@
 
 namespace emulator {
 
+namespace {
+
+[[noreturn]] void throwInvalidRegisterOndexIn(const char* fieldName) {
+    throw std::runtime_error(std::string("invalid register index in ") + fieldName);
+}
+
+[[noreturn]] void throwInstructionFetchGoesPastLoadedProgram() {
+    throw std::runtime_error("instruction fetch goes past loaded program");
+}
+
+[[noreturn]] void throwUDIVDivByZero() {
+    throw std::runtime_error("UDIV: division by zero");
+}
+
+[[noreturn]] void throwSDIVDivByZero() {
+    throw std::runtime_error("SDIV: division by zero");
+}
+
+[[noreturn]] void throwInvalidOpcode() {
+    throw std::runtime_error("invalid opcode");
+}
+
+}
+
 Emulator::Emulator(std::size_t memorySize)
     : memory_(memorySize) {}
 
@@ -73,14 +97,14 @@ bool Emulator::isFinished() const noexcept {
 }
 
 std::uint32_t Emulator::fetchInstructionWord() const {
-    if (pc_ + common::instructionSizeBytes > programEnd_) {
-        throw std::runtime_error("instruction fetch goes past loaded program");
+    if (pc_ + common::instructionSizeBytes > programEnd_) [[unlikely]] {
+        throwInstructionFetchGoesPastLoadedProgram();
     }
 
     return memory_.read32(static_cast<std::uint32_t>(pc_));
 }
 
-DecodedInstruction Emulator::decode(std::uint32_t word) const {
+inline DecodedInstruction Emulator::decode(std::uint32_t word) const {
     DecodedInstruction inst;
     inst.opcode = static_cast<common::Opcode>(word & 0xFF);
     inst.a = static_cast<std::uint8_t>((word >> 8) & 0xFF);
@@ -90,21 +114,21 @@ DecodedInstruction Emulator::decode(std::uint32_t word) const {
     return inst;
 }
 
-void Emulator::validateRegisterIndex(std::uint8_t reg, const char* fieldName) const {
-    if (reg >= common::registerCount && reg != common::assemblerTempRegister) {
-        throw std::runtime_error(std::string("invalid register index in ") + fieldName);
+inline void Emulator::validateRegisterIndex(std::uint8_t reg, const char* fieldName) const {
+    if (reg >= common::registerCount && reg != common::assemblerTempRegister) [[unlikely]] {
+        throwInvalidRegisterOndexIn(fieldName);
     }
 }
 
-std::uint32_t Emulator::readRegister(std::uint8_t reg) const {
-    if (reg == common::assemblerTempRegister) {
+inline std::uint32_t Emulator::readRegister(std::uint8_t reg) const {
+    if (reg == common::assemblerTempRegister) [[unlikely]] {
         return assemblerTempRegister_;
     }
     return registers_[reg];
 }
 
-void Emulator::writeRegister(std::uint8_t reg, std::uint32_t value) {
-    if (reg == common::assemblerTempRegister) {
+inline void Emulator::writeRegister(std::uint8_t reg, std::uint32_t value) {
+    if (reg == common::assemblerTempRegister) [[unlikely]] {
         assemblerTempRegister_ = value;
         return;
     }
@@ -151,7 +175,7 @@ void writeHexWord(std::ostream& out, std::uint32_t value) {
 }
 
 // реализация сдвига без преобразования
-std::uint32_t sra_without_cast(std::uint32_t val, std::uint32_t shift) {
+inline std::uint32_t sraWithoutCast(std::uint32_t val, std::uint32_t shift) {
     shift &= 0x1F;
 
     if (shift == 0) {
@@ -166,57 +190,46 @@ std::uint32_t sra_without_cast(std::uint32_t val, std::uint32_t shift) {
     return shifted | mask;
 } 
 
-std::uint32_t sign_extend_byte(std::uint32_t value) {
-    // sxt для байта смотрит только на младшие 8 бит исходного регистра
-    value &= 0x000000FFu;
-    if ((value & 0x00000080u) == 0) {
-        return value;
-    }
-    return value | 0xFFFFFF00u;
+inline std::uint32_t signExtendBits(std::uint32_t value, unsigned bits) {
+    const std::uint32_t signBit = std::uint32_t{1} << (bits - 1);
+    const std::uint32_t mask = (std::uint32_t{1} << bits) - 1u;
+
+    value &= mask;
+    return (value ^ signBit) - signBit;
 }
 
-std::uint32_t sign_extend_halfword(std::uint32_t value) {
-    // sxt для полуслова смотрит на бит 15 и заполняет старшие 16 бит этим знаком
-    value &= 0x0000FFFFu;
-    if ((value & 0x00008000u) == 0) {
-        return value;
-    }
-    return value | 0xFFFF0000u;
-}
-
-std::uint32_t sign_extend(std::uint32_t value, std::uint8_t mode) {
-    // по заданию остальные режимы sxt игнорируются и оставляют значение без изменений
+inline std::uint32_t signExtend(std::uint32_t value, std::uint8_t mode) {
     switch (mode) {
         case 0:
-            return sign_extend_byte(value);
+            return signExtendBits(value, 8);
         case 1:
-            return sign_extend_halfword(value);
+            return signExtendBits(value, 16);
         default:
             return value;
     }
 }
 
-std::uint32_t byte_swap_halfword(std::uint32_t value) {
+inline std::uint32_t byteSwapHalfword(std::uint32_t value) {
     // режим 1 меняет местами только два младших байта, старшие 16 бит сохраняются
     return (value & 0xFFFF0000u) |
            ((value & 0x000000FFu) << 8) |
            ((value & 0x0000FF00u) >> 8);
 }
 
-std::uint32_t byte_swap_word(std::uint32_t value) {
+inline std::uint32_t byteSwapWord(std::uint32_t value) {
     return ((value & 0x000000FFu) << 24) |
            ((value & 0x0000FF00u) << 8) |
            ((value & 0x00FF0000u) >> 8) |
            ((value & 0xFF000000u) >> 24);
 }
 
-std::uint32_t byte_swap(std::uint32_t value, std::uint8_t mode) {
+inline std::uint32_t byteSwap(std::uint32_t value, std::uint8_t mode) {
     // по заданию остальные режимы bswap игнорируются и оставляют значение без изменений
     switch (mode) {
         case 1:
-            return byte_swap_halfword(value);
+            return byteSwapHalfword(value);
         case 2:
-            return byte_swap_word(value);
+            return byteSwapWord(value);
         default:
             return value;
     }
@@ -396,14 +409,14 @@ void Emulator::execute(const DecodedInstruction& instruction) {
                     result = lhs >> (rhs & 0x1F);
                     break;
                 case common::Opcode::SRA:
-                    result = sra_without_cast(lhs, rhs);
+                    result = sraWithoutCast(lhs, rhs);
                     break;
                 case common::Opcode::MUL:
                     result = lhs * rhs;
                     break;
                 case common::Opcode::UDIV:
-                    if (rhs == 0) {
-                        throw std::runtime_error("UDIV: division by zero");
+                    if (rhs == 0) [[unlikely]] {
+                        throwUDIVDivByZero();
                     }
                     result = lhs / rhs;
                     break;
@@ -411,8 +424,8 @@ void Emulator::execute(const DecodedInstruction& instruction) {
                     const auto signedLhs = static_cast<std::int32_t>(lhs);
                     const auto signedRhs = static_cast<std::int32_t>(rhs);
 
-                    if (signedRhs == 0) {
-                        throw std::runtime_error("SDIV: division by zero");
+                    if (signedRhs == 0) [[unlikely]] {
+                        throwSDIVDivByZero();
                     }
                     result = static_cast<std::uint32_t>(
                         static_cast<std::int64_t>(signedLhs) / //cast to int64 for -2147483648 / -1
@@ -497,10 +510,10 @@ void Emulator::execute(const DecodedInstruction& instruction) {
 
             switch (instruction.opcode) {
                 case common::Opcode::SXT:
-                    result = sign_extend(source, instruction.c);
+                    result = signExtend(source, instruction.c);
                     break;
                 case common::Opcode::BSWAP:
-                    result = byte_swap(source, instruction.c);
+                    result = byteSwap(source, instruction.c);
                     break;
                 default:
                     throw std::logic_error("unreachable opcode in conversion block");
@@ -511,7 +524,7 @@ void Emulator::execute(const DecodedInstruction& instruction) {
             return;
         }
         default:
-            throw std::runtime_error("invalid opcode");
+            throwInvalidOpcode();
     }
 }
 
@@ -529,7 +542,7 @@ void Emulator::step() {
     // номер такта равен числу команд, исполненных перед текущей командой
     const std::uint64_t currentTick = tick_;
     const bool emitRamWriteTrace = ramWriteTraceOutput_ != nullptr;
-    if (emitRamWriteTrace) {
+    if (emitRamWriteTrace) [[unlikely]] {
         // на каждом шаге буфер должен содержать только записи текущей инструкции
         pendingRamWriteTrace_.clear();
     }
@@ -538,7 +551,7 @@ void Emulator::step() {
         tickRangeFilter_.contains(currentTick);
 
     TraceSnapshot before{};
-    if (emitDisasmTrace) {
+    if (emitDisasmTrace) [[unlikely]] {
         // источники должны выводиться со значениями до исполнения команды
         before = captureTraceSnapshot(instruction);
     }
@@ -550,7 +563,7 @@ void Emulator::step() {
     ++tick_;
 
 #if MCST_TRACING
-    if (emitDisasmTrace) {
+    if (emitDisasmTrace) [[unlikely]] {
         writeDisasmTrace(
             currentTick,
             instructionAddress - programBase_,
@@ -559,7 +572,7 @@ void Emulator::step() {
             before
         );
     }
-    if (emitRamWriteTrace) {
+    if (emitRamWriteTrace) [[unlikely]] {
         // RAM trace печатается после execute(), когда известны все изменения ячеек
         flushRamWriteTrace();
     }

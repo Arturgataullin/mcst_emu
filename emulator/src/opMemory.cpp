@@ -6,6 +6,14 @@
 
 namespace emulator {
 
+namespace {
+
+[[noreturn]] void throwMemoryRangeAccessOutOfRange() {
+    throw std::runtime_error("memory range access out of range");
+}
+
+}
+
 // снаружи память адресуется байтами, внутри каждый выделенный блок хранит массив 4-байтовых ячеек
 
 constexpr std::size_t cellMask = 3;
@@ -103,7 +111,7 @@ void Memory::notifyCellWrites(
     std::size_t lastCellIndex,
     std::uint32_t lastOldData
 ) {
-    if (!cellWriteHandler_) {
+    if (!cellWriteHandler_) [[likely]] {
         return;
     }
 
@@ -148,16 +156,15 @@ std::uint32_t Memory::read32(std::uint32_t address) const {
     const std::size_t byteIndex = address & cellMask;
     const std::uint32_t firstCell = readCellUnchecked(firstCellIndex);
 
-    if (byteIndex == 0) {
-        // выровненное чтение 32 бит совпадает с одной внутренней ячейкой памяти
-        return firstCell;
+    if (byteIndex != 0) [[unlikely]] {
+        // невыровненное чтение 32 бит всегда берет хвост текущей ячейки и начало следующей
+        const std::uint32_t secondCell = readCellUnchecked(firstCellIndex + 1);
+        const std::size_t firstShift = byteIndex * 8;
+        const std::size_t secondShift = (cellSize - byteIndex) * 8;
+        return (firstCell >> firstShift) | (secondCell << secondShift);
     }
-
-    // невыровненное чтение 32 бит всегда берет хвост текущей ячейки и начало следующей
-    const std::uint32_t secondCell = readCellUnchecked(firstCellIndex + 1);
-    const std::size_t firstShift = byteIndex * 8;
-    const std::size_t secondShift = (cellSize - byteIndex) * 8;
-    return (firstCell >> firstShift) | (secondCell << secondShift);
+    // выровненное чтение 32 бит совпадает с одной внутренней ячейкой памяти
+    return firstCell;
 }
 
 // запись 0xAB по адресу 0x0
@@ -193,7 +200,7 @@ void Memory::write32(std::uint32_t address, std::uint32_t value) {
     const std::size_t firstCellIndex = address >> cellShift;
     const std::size_t byteIndex = address & cellMask;
 
-    if (byteIndex == 0) {
+    if (byteIndex == 0) [[likely]] {
         // выровненная запись меняет одну ячейку, поэтому можно не раскладывать value по байтам
         const std::uint32_t blockIndex = blockIndexForAddress(address);
         const std::size_t blockOffset = blockOffsetForAddress(address);
@@ -265,10 +272,12 @@ void Memory::setUninitReadHandler(UninitReadHandler handler) {
     cellReadHandler_ = std::move(handler);
 }
 
+
+
 void Memory::checkRange(std::uint32_t address, std::size_t accessSize) const {
     // не считаем address + accessSize напрямую, чтобы не получить переполнение
     if (accessSize > size_ || static_cast<std::size_t>(address) > size_ - accessSize) [[unlikely]] {
-        throw std::runtime_error("memory range access out of range");
+        throwMemoryRangeAccessOutOfRange();
     }
 }
 
@@ -312,29 +321,29 @@ std::uint8_t Memory::getUninitMask(std::uint32_t address, std::size_t byteCount)
 }
 
 void Memory::notifyUninitRead(std::uint32_t address, std::size_t byteCount) const {
-    if (!cellReadHandler_) {
+    if (!cellReadHandler_) [[likely]] {
         return;
     }
 
     const std::uint8_t mask = getUninitMask(address, byteCount);
-    if (mask == 0) {
+    if (mask == 0) [[likely]] {
         return;
     }
 
     cellReadHandler_(address, byteCount, mask);
 }
 
-std::uint32_t Memory::readCellUnchecked(std::size_t cellIndex) const {
+inline std::uint32_t Memory::readCellUnchecked(std::size_t cellIndex) const {
     const std::uint32_t blockIndex = static_cast<std::uint32_t>(cellIndex >> cellsPerBlockShift);
     const Block* block = findBlock(blockIndex);
-    if (block == nullptr) {
+    if (block == nullptr) [[unlikely]] {
         return 0;
     }
 
     return block->cells[cellIndex & (cellsPerBlock - 1)];
 }
 
-void Memory::writeCellUnchecked(std::size_t cellIndex, std::uint32_t value) {
+inline void Memory::writeCellUnchecked(std::size_t cellIndex, std::uint32_t value) {
     const std::uint32_t blockIndex = static_cast<std::uint32_t>(cellIndex >> cellsPerBlockShift);
     Block& block = getOrCreateBlock(blockIndex);
     block.cells[cellIndex & (cellsPerBlock - 1)] = value;
@@ -353,15 +362,15 @@ const Memory::Block* Memory::findBlock(std::uint32_t blockIndex) const {
     return &it->second;
 }
 
-std::uint32_t Memory::blockIndexForAddress(std::uint32_t address) noexcept {
+inline std::uint32_t Memory::blockIndexForAddress(std::uint32_t address) noexcept {
     return address >> blockShift;
 }
 
-std::size_t Memory::blockOffsetForAddress(std::uint32_t address) noexcept {
+inline std::size_t Memory::blockOffsetForAddress(std::uint32_t address) noexcept {
     return address & blockMask;
 }
 
-std::uint8_t Memory::readByteFromBlock(const Block& block, std::size_t blockOffset) noexcept {
+inline std::uint8_t Memory::readByteFromBlock(const Block& block, std::size_t blockOffset) noexcept {
     // blockOffset уже относится к конкретному блоку, поэтому здесь остается только выбрать ячейку и байт
     const std::size_t cellIndex = blockOffset >> cellShift;
     const std::size_t byteIndex = blockOffset & cellMask;
@@ -370,7 +379,7 @@ std::uint8_t Memory::readByteFromBlock(const Block& block, std::size_t blockOffs
     return static_cast<std::uint8_t>((block.cells[cellIndex] >> shift) & byteMask);
 }
 
-void Memory::writeByteToBlock(Block& block, std::size_t blockOffset, std::uint8_t value) noexcept {
+inline void Memory::writeByteToBlock(Block& block, std::size_t blockOffset, std::uint8_t value) noexcept {
     // запись байта не трогает остальные байты той же 4-байтовой ячейки
     const std::size_t cellIndex = blockOffset >> cellShift;
     const std::size_t byteIndex = blockOffset & cellMask;
