@@ -24,6 +24,7 @@ void printHelp(std::ostream& out) {
         << "options:\n"
         << "  --help                         show this help and exit\n"
         << "  --ram-size=<size>              set RAM size in bytes; value must be a positive multiple of 4\n"
+        << "  --clear-stack                  fill released stack bytes with zeros\n"
         << "  --warn=uninit-ram              warn when a load reads uninitialized RAM bytes\n"
         << '\n'
         << "trace options:\n";
@@ -43,6 +44,7 @@ void printHelp(std::ostream& out) {
         << "examples:\n"
         << "  emulator program.o\n"
         << "  emulator --ram-size=4096 program.o\n"
+        << "  emulator --clear-stack program.o\n"
         << "  emulator --warn=uninit-ram program.o\n";
 #if MCST_TRACING
     out
@@ -76,11 +78,16 @@ int main(int argc, char* argv[]) {
 
     try {
         emulator::Emulator emulator(options.ramSize);
-        emulator.loadProgramFromFile(options.inputPath);
+
+        if (options.clearStack) {
+            emulator.enableClearStack();
+        }
 
         if (options.warnings.uninitializedRam) {
             emulator.enableUninitializedRamWarnings(std::cerr);
         }
+
+        emulator.loadProgramFromFile(options.inputPath);
 
 #if MCST_TRACING
         if (options.trace.disasm || options.trace.ramWrites) {

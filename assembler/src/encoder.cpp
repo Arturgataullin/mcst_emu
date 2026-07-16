@@ -248,8 +248,9 @@ std::uint8_t Encoder::requireStatusRegister(
     switch (reg) {
         case common::StatusRegister::SpTop:
         case common::StatusRegister::SpSize:
-        case common::StatusRegister::SpBottom:
             return common::statusRegisterIndex(reg);
+        case common::StatusRegister::Count:
+            break;
     }
 
     fail(location, std::string(operandName) + " has invalid index");

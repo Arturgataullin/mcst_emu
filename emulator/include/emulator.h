@@ -46,6 +46,7 @@ public:
 
     [[nodiscard]] std::string dumpRegisters() const;
     void enableUninitializedRamWarnings(std::ostream& output);
+    void enableClearStack();
 
 #if MCST_TRACING
     // void enableDisasmTrace(std::ostream& output, std::vector<TickRange> ranges = {});
@@ -65,6 +66,10 @@ private:
     [[nodiscard]] std::uint32_t readRegister(std::uint8_t reg) const;
     void writeRegister(std::uint8_t reg, std::uint32_t value);
     void writeUninitRamWarning(std::uint32_t address, std::size_t byteCount, std::uint8_t uninitMask) const;
+
+    [[nodiscard]] std::uint32_t readStatusRegister(common::StatusRegister reg) const;
+    void writeStatusRegister(common::StatusRegister reg, std::uint32_t value);
+    void advanceStackPointer(std::uint8_t destination, std::int64_t delta);
 
 #if MCST_TRACING
     // снимок хранит только значения операндов текущей инструкции, а не весь файл регистров
@@ -98,12 +103,18 @@ private:
 private:
     std::array<std::uint32_t, common::registerCount> registers_{};
     std::uint32_t assemblerTempRegister_ = 0;
+    // исходное значение SP_TOP ограничивает освобождение стека сверху
+    std::uint32_t stackBottom_ = 0;
+    // индекс элемента совпадает с индексом SCR в машинной инструкции
+    std::array<std::uint32_t, common::statusRegisterCount> statusRegisters_{};
+
     Memory memory_;
 
     std::uint64_t pc_ = common::resetAddress;
     std::uint32_t programBase_ = common::resetAddress;
     std::uint64_t programEnd_ = common::resetAddress;
     std::uint64_t tick_ = 0;
+    bool clearStack_ = false;
     std::ostream* uninitRamWarningOutput_ = nullptr;
 
 #if MCST_TRACING

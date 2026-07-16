@@ -33,6 +33,7 @@ TEST_CASE("command line parser accepts input path with defaults") {
     REQUIRE_FALSE(options.trace.disasm);
     REQUIRE_FALSE(options.trace.ramWrites);
     REQUIRE_FALSE(options.warnings.uninitializedRam);
+    REQUIRE_FALSE(options.clearStack);
     REQUIRE_FALSE(options.isNeedHelp);
 }
 
@@ -91,6 +92,12 @@ TEST_CASE("command line parser parses warning modes") {
     REQUIRE(options.warnings.uninitializedRam);
 }
 
+TEST_CASE("command line parser parses clear stack option") {
+    const auto options = parse({"--clear-stack", "program.o"});
+
+    REQUIRE(options.clearStack);
+}
+
 #if MCST_TRACING
 
 TEST_CASE("command line parser rejects unknown trace mode") {
@@ -138,6 +145,13 @@ TEST_CASE("command line parser rejects duplicate help option") {
     REQUIRE_THROWS_WITH(
         parse({"--help", "--help"}),
         ContainsSubstring("--help specified more than once")
+    );
+}
+
+TEST_CASE("command line parser rejects duplicate clear stack option") {
+    REQUIRE_THROWS_WITH(
+        parse({"--clear-stack", "--clear-stack", "program.o"}),
+        ContainsSubstring("--clear-stack specified more than once")
     );
 }
 

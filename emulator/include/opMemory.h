@@ -59,6 +59,9 @@ public:
     [[nodiscard]] std::size_t size() const noexcept;
     void setCellWriteHandler(CellWriteHandler handler);
     void setUninitReadHandler(UninitReadHandler handler);
+    void clearRange(std::uint32_t address, std::size_t byteCount);
+    void clearAndMarkUninitialized(std::uint32_t address, std::size_t byteCount);
+    void markUninitialized(std::uint32_t address, std::size_t byteCount);
 
 private:
 
@@ -67,7 +70,7 @@ private:
         std::bitset<blockSize> initialized{};
     };
 
-    // функции без проверки доступности памти по адресу для использования в write/read16,32
+    // функции без проверки доступности памяти по адресу для использования в write/read16,32
     [[nodiscard]] std::uint8_t read8Unchecked(std::uint32_t address) const;
     void write8Unchecked(std::uint32_t address, std::uint8_t value);
 
@@ -81,6 +84,7 @@ private:
     );
 
     void checkRange(std::uint32_t address, std::size_t size) const;
+    void clearRangeImpl(std::uint32_t address, std::size_t byteCount, bool resetInitialized);
     void markInitialized(std::uint32_t address, std::size_t byteCount);
     [[nodiscard]] std::uint8_t getUninitMask(std::uint32_t address, std::size_t byteCount) const;
     void notifyUninitRead(std::uint32_t address, std::size_t byteCount) const;
@@ -94,7 +98,11 @@ private:
     // эти функции работают с уже найденным блоком, чтобы не делать поиск в unordered_map на каждый байт
     [[nodiscard]] static std::uint8_t readByteFromBlock(const Block& block, std::size_t blockOffset) noexcept;
     static void writeByteToBlock(Block& block, std::size_t blockOffset, std::uint8_t value) noexcept;
+    [[nodiscard]] static std::uint32_t byteRangeMask(std::size_t byteOffset, std::size_t byteCount) noexcept;
+    static void clearBytesInCell(std::uint32_t& cell, std::size_t byteOffset, std::size_t byteCount) noexcept;
+    static void clearBytesInBlock(Block& block, std::size_t blockOffset, std::size_t byteCount) noexcept;
     static void markInitializedInBlock(Block& block, std::size_t blockOffset, std::size_t byteCount);
+    static void resetInitializedInBlock(Block& block, std::size_t blockOffset, std::size_t byteCount);
 
 private:
     // память хранится блоками по 4кб, чтобы большой объем RAM не выделялся сразу

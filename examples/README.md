@@ -36,6 +36,16 @@
   `R6=0x44332211`.
 - `ex9.s` - пример для предупреждений о чтении неинициализированной RAM.
   Запускать полезнее с `--warn=uninit-ram`.
+- `stack.s` - инициализация `SP_TOP`/`SP_SIZE`, выделение через `ASPI`, запись
+  значения и освобождение стека. Ключевой результат: `R6=0xbff0`, `R8=0xc000`,
+  `R9=0xc000`, `R10=0x4000`.
+- `stack_aspr.s` - та же последовательность со знаковым смещением в регистре и
+  командами `ASPR`. Ключевой результат: `R6=0xbff0`, `R9=0xc000`,
+  `R10=0xc000`, `R11=0x4000`.
+- `stack_uninit.s` - намеренное чтение слова после освобождения стека для
+  демонстрации дополнительного задания `--warn=uninit-ram`. Без очистки
+  `R9=0x11223344`; с `--clear-stack` значение `R9=0x0`, но в обоих случаях
+  выводится предупреждение о четырёх освобождённых байтах.
 
 ## Полезные запуски
 
@@ -70,6 +80,45 @@
 ```bash
 ./build/assembler/assembler examples/ex9.s examples/ex9.o
 ./build/emulator/emulator --warn=uninit-ram examples/ex9.o
+```
+
+Пример стека требует RAM не меньше `0x10000` байт:
+
+```bash
+./build/assembler/assembler examples/stack.s examples/stack.o
+./build/emulator/emulator --ram-size=65536 examples/stack.o
+```
+
+Трассировка очистки освобождённого стека:
+
+```bash
+./build/emulator/emulator --ram-size=65536 --clear-stack --trace=disasm,ram-wr examples/stack.o
+```
+
+Пример смещения стека из регистра:
+
+```bash
+./build/assembler/assembler examples/stack_aspr.s examples/stack_aspr.o
+./build/emulator/emulator --ram-size=65536 examples/stack_aspr.o
+```
+
+Предупреждение при чтении освобождённой памяти без обнуления:
+
+```bash
+./build/assembler/assembler examples/stack_uninit.s examples/stack_uninit.o
+./build/emulator/emulator --ram-size=65536 --warn=uninit-ram examples/stack_uninit.o
+```
+
+Ожидаемая часть предупреждения:
+
+```text
+read 4 byte(s) at 0x0000bffc uninit: 0x0000bffc,0x0000bffd,0x0000bffe,0x0000bfff
+```
+
+Тот же пример с предварительным обнулением освобождённого диапазона:
+
+```bash
+./build/emulator/emulator --ram-size=65536 --clear-stack --trace=ram-wr --warn=uninit-ram examples/stack_uninit.o
 ```
 
 Файлы `.o` являются генерируемыми и не хранятся в Git.

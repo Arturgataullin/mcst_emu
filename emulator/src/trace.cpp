@@ -73,6 +73,18 @@ namespace {
             out << ')';
     }
 
+    void writeStatusRegisterOperand(
+        std::ostream& out,
+        std::uint8_t index,
+        std::uint32_t value
+    ) {
+        out << ' '
+            << common::toString(static_cast<common::StatusRegister>(index))
+            << " (";
+        writeHexValue(out, value);
+        out << ')';
+    }
+
 }
 
 void Emulator::enableDisasmTrace(std::ostream& output) {
@@ -160,7 +172,7 @@ void Emulator::writeDisasmTrace(
     const DecodedInstruction& instruction,
     const TraceSnapshot& before
 ) const {
-    // приёмник читается после execute(), а источники - из снимка до execute()
+    // регистры назначения читаются после execute(), а регистры-источники - из снимка до execute()
     // использую основной поток вывода, но сохраняю его состояние и флаги
     std::ostream& out = *traceOutput_;
     StreamStateGuard guard(out);
@@ -229,6 +241,32 @@ void Emulator::writeDisasmTrace(
             writeRegisterOperand(out, instruction.a, readRegister(instruction.a));
             writeRegisterOperand(out, instruction.b, before.b);
             out << " imm (0x" << std::hex << static_cast<unsigned>(instruction.c) << ')';
+            break;
+
+        case common::Opcode::SCRW:
+            out << ' '
+                << common::toString(static_cast<common::StatusRegister>(instruction.a));
+            writeRegisterOperand(out, instruction.b, before.b);
+            break;
+
+        case common::Opcode::SCRR:
+            writeRegisterOperand(out, instruction.a, readRegister(instruction.a));
+            // SCRR не изменяет SCR, поэтому значение SCR можно читать без предварительного снимка
+            writeStatusRegisterOperand(
+                out,
+                instruction.b,
+                readStatusRegister(static_cast<common::StatusRegister>(instruction.b))
+            );
+            break;
+
+        case common::Opcode::ASPI:
+            writeRegisterOperand(out, instruction.a, readRegister(instruction.a));
+            out << " imm (0x" << std::hex << instruction.imm << ')';
+            break;
+
+        case common::Opcode::ASPR:
+            writeRegisterOperand(out, instruction.a, readRegister(instruction.a));
+            writeRegisterOperand(out, instruction.b, before.b);
             break;
     }
 

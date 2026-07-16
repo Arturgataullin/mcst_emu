@@ -94,8 +94,11 @@ namespace common {
     enum class StatusRegister : std::uint8_t {
         SpTop = 1,
         SpSize = 2,
-        SpBottom = 3 // исходный верхний адрес 
+        // служебное значение задаёт размер массива SCR и не является регистром
+        Count = 3
     };
+
+    inline constexpr std::size_t statusRegisterCount = static_cast<std::size_t>(StatusRegister::Count);
 
     [[nodiscard]] std::optional<Operation> operationFromString(std::string_view lexeme);
     [[nodiscard]] std::optional<StatusRegister> statusRegisterFromString(std::string_view lexeme);

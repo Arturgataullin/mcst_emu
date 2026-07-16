@@ -350,10 +350,6 @@ StatusRegisterOperand Parser::parseStatusRegisterOperand() {
     if (index == common::statusRegisterIndex(common::StatusRegister::SpSize)) {
         return StatusRegisterOperand{common::StatusRegister::SpSize};
     }
-    if (index == common::statusRegisterIndex(common::StatusRegister::SpBottom)) {
-        return StatusRegisterOperand{common::StatusRegister::SpBottom};
-    }
-
     fail(token.location, "status register index must be 1 or 2");
 }
 

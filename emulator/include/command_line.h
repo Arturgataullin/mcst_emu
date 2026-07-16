@@ -32,6 +32,7 @@ struct CommandLineOptions {
     TraceOptions trace;
     WarningOptions warnings;
     bool isNeedHelp = false;
+    bool clearStack = false;
 };
 
 [[nodiscard]] CommandLineOptions parseCommandLine(int argc, char* argv[]);

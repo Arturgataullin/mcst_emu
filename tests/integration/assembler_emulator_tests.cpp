@@ -5,6 +5,7 @@
 #include "../support/temporary_directory.h"
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -26,7 +27,9 @@ void writeSource(const fs::path& path, const std::string& source) {
 
 std::array<std::uint32_t, common::registerCount> assembleAndRun(
     const std::string& testName,
-    const std::string& source
+    const std::string& source,
+    std::size_t memorySize = common::opMemorySize,
+    bool clearStack = false
 ) {
     TemporaryDirectory temp("assembler_emulator_" + testName);
     const fs::path sourcePath = temp.path() / "program.s";
@@ -37,7 +40,10 @@ std::array<std::uint32_t, common::registerCount> assembleAndRun(
     assembler::Assembler assembler;
     assembler.assembleFile(sourcePath.string(), binaryPath.string());
 
-    emulator::Emulator emulator;
+    emulator::Emulator emulator(memorySize);
+    if (clearStack) {
+        emulator.enableClearStack();
+    }
     emulator.loadProgramFromFile(binaryPath.string());
     emulator.run();
 
@@ -78,4 +84,45 @@ TEST_CASE("assembled NOT works for highest user register") {
     );
 
     REQUIRE(registers[15] == 0xFFFFFF00u);
+}
+
+TEST_CASE("assembled stack program allocates stores and releases memory") {
+    const auto registers = assembleAndRun(
+        "stack_program",
+        "LI R5 0xc000\n"
+        "SCRW SP_TOP R5\n"
+        "LI R5 0x4000\n"
+        "SCRW SP_SIZE R5\n"
+        "ASPI R6 0xfff0\n"
+        "LFI R7 0x11223344\n"
+        "STW R7 R6 0x0\n"
+        "ASPI R8 0x0010\n"
+        "SCRR R9 SP_TOP\n"
+        "SCRR R10 SP_SIZE\n",
+        65536
+    );
+
+    REQUIRE(registers[6] == 0xBFF0u);
+    REQUIRE(registers[8] == 0xC000u);
+    REQUIRE(registers[9] == 0xC000u);
+    REQUIRE(registers[10] == 0x4000u);
+}
+
+TEST_CASE("assembled stack program clears released memory when clear stack is enabled") {
+    const auto registers = assembleAndRun(
+        "stack_clear",
+        "LI R5 0x0040\n"
+        "SCRW SP_TOP R5\n"
+        "LI R5 0x0004\n"
+        "SCRW SP_SIZE R5\n"
+        "ASPI R1 0xfffc\n"
+        "LFI R2 0x11223344\n"
+        "STW R2 R1 0x0\n"
+        "ASPI R3 0x0004\n"
+        "LDW R4 R1 0x0\n",
+        256,
+        true
+    );
+
+    REQUIRE(registers[4] == 0u);
 }

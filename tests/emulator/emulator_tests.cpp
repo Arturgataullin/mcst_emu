@@ -413,6 +413,333 @@ TEST_CASE("emulator warning lists only uninitialized bytes from a multi-byte rea
     REQUIRE(emulator.registers()[2] == 0x0000AB00u);
 }
 
+TEST_CASE("emulator writes and reads stack status registers independently") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x34, 0x12, // LI R0 0x1234
+        0x20, 0x01, 0x00, 0x00, // SCRW SP_TOP R0
+        0x00, 0x00, 0xCD, 0xAB, // LI R0 0xABCD
+        0x20, 0x02, 0x00, 0x00, // SCRW SP_SIZE R0
+        0x21, 0x01, 0x01, 0x00, // SCRR R1 SP_TOP
+        0x21, 0x02, 0x02, 0x00  // SCRR R2 SP_SIZE
+    };
+
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.run();
+
+    REQUIRE(emulator.registers()[1] == 0x1234u);
+    REQUIRE(emulator.registers()[2] == 0xABCDu);
+    REQUIRE(emulator.pc() == program.size());
+}
+
+TEST_CASE("emulator resets stack status registers when loading another program") {
+    const std::vector<std::uint8_t> firstProgram = {
+        0x00, 0x00, 0x00, 0x01, // LI R0 0x0100
+        0x20, 0x01, 0x00, 0x00, // SCRW SP_TOP R0
+        0x00, 0x00, 0x20, 0x00, // LI R0 0x20
+        0x20, 0x02, 0x00, 0x00  // SCRW SP_SIZE R0
+    };
+    const std::vector<std::uint8_t> secondProgram = {
+        0x21, 0x01, 0x01, 0x00, // SCRR R1 SP_TOP
+        0x21, 0x02, 0x02, 0x00  // SCRR R2 SP_SIZE
+    };
+
+    emulator::Emulator emulator;
+    emulator.loadProgram(firstProgram);
+    emulator.run();
+
+    emulator.loadProgram(secondProgram);
+    emulator.run();
+
+    REQUIRE(emulator.registers()[1] == 0u);
+    REQUIRE(emulator.registers()[2] == 0u);
+}
+
+TEST_CASE("emulator validates SCRW and SCRR operands") {
+    SECTION("SCRW status register") {
+        const std::vector<std::uint8_t> program = {
+            0x20, 0x00, 0x00, 0x00 // SCRW SCR0 R0
+        };
+
+        emulator::Emulator emulator;
+        emulator.loadProgram(program);
+        REQUIRE_THROWS_WITH(emulator.run(), ContainsSubstring("invalid status register index"));
+    }
+
+    SECTION("SCRR status register") {
+        const std::vector<std::uint8_t> program = {
+            0x21, 0x00, 0x03, 0x00 // SCRR R0 SCR3
+        };
+
+        emulator::Emulator emulator;
+        emulator.loadProgram(program);
+        REQUIRE_THROWS_WITH(emulator.run(), ContainsSubstring("invalid status register index"));
+    }
+
+    SECTION("SCRW source register") {
+        const std::vector<std::uint8_t> program = {
+            0x20, 0x01, 0x10, 0x00 // SCRW SP_TOP R16
+        };
+
+        emulator::Emulator emulator;
+        emulator.loadProgram(program);
+        REQUIRE_THROWS_WITH(emulator.run(), ContainsSubstring("invalid register index in source"));
+    }
+
+    SECTION("SCRR destination register") {
+        const std::vector<std::uint8_t> program = {
+            0x21, 0x10, 0x01, 0x00 // SCRR R16 SP_TOP
+        };
+
+        emulator::Emulator emulator;
+        emulator.loadProgram(program);
+        REQUIRE_THROWS_WITH(emulator.run(), ContainsSubstring("invalid register index in destination"));
+    }
+}
+
+TEST_CASE("ASPI allocates one byte and returns the new stack top") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x00, 0x01, // LI R0 0x0100
+        0x20, 0x01, 0x00, 0x00, // SCRW SP_TOP R0
+        0x00, 0x00, 0x01, 0x00, // LI R0 1
+        0x20, 0x02, 0x00, 0x00, // SCRW SP_SIZE R0
+        0x22, 0x03, 0xFF, 0xFF, // ASPI R3 0xFFFF (-1)
+        0x21, 0x04, 0x01, 0x00, // SCRR R4 SP_TOP
+        0x21, 0x05, 0x02, 0x00  // SCRR R5 SP_SIZE
+    };
+
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.run();
+
+    REQUIRE(emulator.registers()[3] == 0xFFu);
+    REQUIRE(emulator.registers()[4] == 0xFFu);
+    REQUIRE(emulator.registers()[5] == 0u);
+}
+
+TEST_CASE("ASPI can allocate all available stack space") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x00, 0x01, // LI R0 0x0100
+        0x20, 0x01, 0x00, 0x00, // SCRW SP_TOP R0
+        0x00, 0x00, 0x10, 0x00, // LI R0 0x10
+        0x20, 0x02, 0x00, 0x00, // SCRW SP_SIZE R0
+        0x22, 0x03, 0xF0, 0xFF, // ASPI R3 0xFFF0 (-16)
+        0x21, 0x04, 0x02, 0x00  // SCRR R4 SP_SIZE
+    };
+
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.run();
+
+    REQUIRE(emulator.registers()[3] == 0xF0u);
+    REQUIRE(emulator.registers()[4] == 0u);
+}
+
+TEST_CASE("ASPI rejects allocation larger than available stack space") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x00, 0x01, // LI R0 0x0100
+        0x20, 0x01, 0x00, 0x00, // SCRW SP_TOP R0
+        0x00, 0x00, 0x0F, 0x00, // LI R0 0x0F
+        0x20, 0x02, 0x00, 0x00, // SCRW SP_SIZE R0
+        0x22, 0x03, 0xF0, 0xFF  // ASPI R3 0xFFF0 (-16)
+    };
+
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+
+    REQUIRE_THROWS_WITH(emulator.run(), ContainsSubstring("stack overflow"));
+}
+
+TEST_CASE("ASPI releases stack space") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x00, 0x01, // LI R0 0x0100
+        0x20, 0x01, 0x00, 0x00, // SCRW SP_TOP R0
+        0x00, 0x00, 0x10, 0x00, // LI R0 0x10
+        0x20, 0x02, 0x00, 0x00, // SCRW SP_SIZE R0
+        0x22, 0x02, 0xF0, 0xFF, // ASPI R2 -16
+        0x22, 0x03, 0x10, 0x00, // ASPI R3 0x0010 (+16)
+        0x21, 0x04, 0x02, 0x00  // SCRR R4 SP_SIZE
+    };
+
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.run();
+
+    REQUIRE(emulator.registers()[3] == 0x100u);
+    REQUIRE(emulator.registers()[4] == 0x10u);
+}
+
+TEST_CASE("ASPI rejects release past the beginning of the stack") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x00, 0x01, // LI R0 0x0100
+        0x20, 0x01, 0x00, 0x00, // SCRW SP_TOP R0
+        0x22, 0x03, 0x01, 0x00  // ASPI R3 1
+    };
+
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+
+    REQUIRE_THROWS_WITH(emulator.run(), ContainsSubstring("stack underflow"));
+}
+
+TEST_CASE("released stack bytes are preserved when clear stack is disabled") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x40, 0x00, // LI R0 0x40
+        0x20, 0x01, 0x00, 0x00, // SCRW SP_TOP R0
+        0x00, 0x00, 0x04, 0x00, // LI R0 4
+        0x20, 0x02, 0x00, 0x00, // SCRW SP_SIZE R0
+        0x22, 0x01, 0xFC, 0xFF, // ASPI R1 -4
+        0x00, 0x02, 0xCD, 0xAB, // LI R2 0xABCD
+        0x15, 0x02, 0x01, 0x00, // STW R2 R1 0
+        0x22, 0x03, 0x04, 0x00, // ASPI R3 4
+        0x12, 0x04, 0x01, 0x00  // LDW R4 R1 0
+    };
+
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.run();
+
+    REQUIRE(emulator.registers()[4] == 0x0000ABCDu);
+}
+
+TEST_CASE("released stack bytes become uninitialized without being cleared") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x40, 0x00, // LI R0 0x40
+        0x20, 0x01, 0x00, 0x00, // SCRW SP_TOP R0
+        0x00, 0x00, 0x04, 0x00, // LI R0 4
+        0x20, 0x02, 0x00, 0x00, // SCRW SP_SIZE R0
+        0x22, 0x01, 0xFC, 0xFF, // ASPI R1 -4
+        0x00, 0x02, 0xCD, 0xAB, // LI R2 0xABCD
+        0x15, 0x02, 0x01, 0x00, // STW R2 R1 0
+        0x22, 0x03, 0x04, 0x00, // ASPI R3 4
+        0x12, 0x04, 0x01, 0x00  // LDW R4 R1 0
+    };
+    std::ostringstream warnings;
+
+    emulator::Emulator emulator;
+    emulator.enableUninitializedRamWarnings(warnings);
+    emulator.loadProgram(program);
+    emulator.run();
+
+    REQUIRE(emulator.registers()[4] == 0x0000ABCDu);
+    REQUIRE(warnings.str().find("read 4 byte(s) at 0x0000003c") != std::string::npos);
+}
+
+TEST_CASE("clear stack zeroes released bytes and resets their initialization state") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x40, 0x00, // LI R0 0x40
+        0x20, 0x01, 0x00, 0x00, // SCRW SP_TOP R0
+        0x00, 0x00, 0x04, 0x00, // LI R0 4
+        0x20, 0x02, 0x00, 0x00, // SCRW SP_SIZE R0
+        0x22, 0x01, 0xFC, 0xFF, // ASPI R1 -4
+        0x00, 0x02, 0xCD, 0xAB, // LI R2 0xABCD
+        0x15, 0x02, 0x01, 0x00, // STW R2 R1 0
+        0x22, 0x03, 0x04, 0x00, // ASPI R3 4
+        0x12, 0x04, 0x01, 0x00  // LDW R4 R1 0
+    };
+    std::ostringstream warnings;
+
+    emulator::Emulator emulator;
+    emulator.enableClearStack();
+    emulator.enableUninitializedRamWarnings(warnings);
+    emulator.loadProgram(program);
+    emulator.run();
+
+    REQUIRE(emulator.registers()[4] == 0u);
+    REQUIRE(warnings.str().find("read 4 byte(s) at 0x0000003c") != std::string::npos);
+    REQUIRE(warnings.str().find("0x0000003c,0x0000003d,0x0000003e,0x0000003f") != std::string::npos);
+}
+
+TEST_CASE("ASPI supports multiple sequential allocations") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x00, 0x01, // LI R0 0x0100
+        0x20, 0x01, 0x00, 0x00, // SCRW SP_TOP R0
+        0x00, 0x00, 0x20, 0x00, // LI R0 0x20
+        0x20, 0x02, 0x00, 0x00, // SCRW SP_SIZE R0
+        0x22, 0x03, 0xFF, 0xFF, // ASPI R3 -1
+        0x22, 0x04, 0xFE, 0xFF, // ASPI R4 -2
+        0x21, 0x05, 0x02, 0x00  // SCRR R5 SP_SIZE
+    };
+
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.run();
+
+    REQUIRE(emulator.registers()[3] == 0xFFu);
+    REQUIRE(emulator.registers()[4] == 0xFDu);
+    REQUIRE(emulator.registers()[5] == 0x1Du);
+}
+
+TEST_CASE("ASPR interprets 0xFFFFFFFF as minus one") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x00, 0x01, // LI R0 0x0100
+        0x20, 0x01, 0x00, 0x00, // SCRW SP_TOP R0
+        0x00, 0x00, 0x10, 0x00, // LI R0 0x10
+        0x20, 0x02, 0x00, 0x00, // SCRW SP_SIZE R0
+        0x00, 0x01, 0xFF, 0xFF, // LI R1 0xFFFF
+        0x01, 0x01, 0xFF, 0xFF, // LUI R1 0xFFFF
+        0x23, 0x03, 0x01, 0x00  // ASPR R3 R1
+    };
+
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.run();
+
+    REQUIRE(emulator.registers()[3] == 0xFFu);
+}
+
+TEST_CASE("ASPR handles INT32_MIN without host signed overflow") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x00, 0x00, // LI R0 0
+        0x01, 0x00, 0x00, 0x80, // LUI R0 0x8000
+        0x20, 0x01, 0x00, 0x00, // SCRW SP_TOP R0
+        0x20, 0x02, 0x00, 0x00, // SCRW SP_SIZE R0
+        0x00, 0x01, 0x00, 0x00, // LI R1 0
+        0x01, 0x01, 0x00, 0x80, // LUI R1 0x8000
+        0x23, 0x03, 0x01, 0x00, // ASPR R3 R1
+        0x21, 0x04, 0x02, 0x00  // SCRR R4 SP_SIZE
+    };
+
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.run();
+
+    REQUIRE(emulator.registers()[3] == 0u);
+    REQUIRE(emulator.registers()[4] == 0u);
+}
+
+TEST_CASE("emulator validates ASP instructions register fields") {
+    SECTION("ASPI destination") {
+        const std::vector<std::uint8_t> program = {
+            0x22, 0x10, 0x00, 0x00 // ASPI R16 0
+        };
+
+        emulator::Emulator emulator;
+        emulator.loadProgram(program);
+        REQUIRE_THROWS_WITH(emulator.run(), ContainsSubstring("invalid register index in destination"));
+    }
+
+    SECTION("ASPR destination") {
+        const std::vector<std::uint8_t> program = {
+            0x23, 0x10, 0x00, 0x00 // ASPR R16 R0
+        };
+
+        emulator::Emulator emulator;
+        emulator.loadProgram(program);
+        REQUIRE_THROWS_WITH(emulator.run(), ContainsSubstring("invalid register index in destination"));
+    }
+
+    SECTION("ASPR source") {
+        const std::vector<std::uint8_t> program = {
+            0x23, 0x00, 0x10, 0x00 // ASPR R0 R16
+        };
+
+        emulator::Emulator emulator;
+        emulator.loadProgram(program);
+        REQUIRE_THROWS_WITH(emulator.run(), ContainsSubstring("invalid register index in source"));
+    }
+}
+
 TEST_CASE("emulator rejects division by zero") {
     SECTION("unsigned division") {
         const std::vector<std::uint8_t> program = {
@@ -648,6 +975,67 @@ TEST_CASE("trace reads aliased memory base register from pre-instruction state")
         trace.str() ==
         "---- 1 0x4 ----\n"
         "0x00000010 LDB R0 (0x0) R0 (0x40) imm (0x0)\n"
+    );
+}
+
+TEST_CASE("trace prints stack instruction operands") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x05, 0x00, 0xC0, // LI R5 0xC000
+        0x20, 0x01, 0x05, 0x00, // SCRW SP_TOP R5
+        0x00, 0x05, 0x00, 0x40, // LI R5 0x4000
+        0x20, 0x02, 0x05, 0x00, // SCRW SP_SIZE R5
+        0x21, 0x06, 0x01, 0x00, // SCRR R6 SP_TOP
+        0x22, 0x06, 0xF0, 0xFF, // ASPI R6 -16
+        0x00, 0x05, 0xF0, 0xFF, // LI R5 0xFFF0
+        0x01, 0x05, 0xFF, 0xFF, // LUI R5 0xFFFF
+        0x00, 0x00, 0x00, 0xC0, // LI R0 0xC000
+        0x20, 0x01, 0x00, 0x00, // SCRW SP_TOP R0
+        0x23, 0x06, 0x05, 0x00  // ASPR R6 R5
+    };
+
+    std::ostringstream trace;
+    emulator::Emulator emulator(65536);
+    emulator.loadProgram(program);
+    emulator.enableDisasmTrace(trace);
+    emulator.setTraceTicks({{1, 1}, {4, 5}, {10, 10}});
+    emulator.run();
+
+    REQUIRE(
+        trace.str() ==
+        "---- 1 0x4 ----\n"
+        "0x00050120 SCRW SP_TOP R5 (0xc000)\n"
+        "---- 4 0x10 ----\n"
+        "0x00010621 SCRR R6 (0xc000) SP_TOP (0xc000)\n"
+        "---- 5 0x14 ----\n"
+        "0xfff00622 ASPI R6 (0xbff0) imm (0xfff0)\n"
+        "---- 10 0x28 ----\n"
+        "0x00050623 ASPR R6 (0xbff0) R5 (0xfffffff0)\n"
+    );
+}
+
+TEST_CASE("clear stack is reported as a RAM write by the releasing instruction") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x40, 0x00, // LI R0 0x40
+        0x20, 0x01, 0x00, 0x00, // SCRW SP_TOP R0
+        0x00, 0x00, 0x04, 0x00, // LI R0 4
+        0x20, 0x02, 0x00, 0x00, // SCRW SP_SIZE R0
+        0x22, 0x01, 0xFC, 0xFF, // ASPI R1 -4
+        0x00, 0x02, 0xCD, 0xAB, // LI R2 0xABCD
+        0x15, 0x02, 0x01, 0x00, // STW R2 R1 0
+        0x22, 0x03, 0x04, 0x00  // ASPI R3 4
+    };
+
+    std::ostringstream trace;
+    emulator::Emulator emulator;
+    emulator.enableClearStack();
+    emulator.loadProgram(program);
+    emulator.setTraceTicks({{7, 7}});
+    emulator.enableRamWriteTrace(trace);
+    emulator.run();
+
+    REQUIRE(
+        trace.str() ==
+        "7 RAM [0x0000003c] wr 0x0000abcd -> 0x00000000\n"
     );
 }
 

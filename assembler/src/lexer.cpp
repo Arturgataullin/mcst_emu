@@ -94,7 +94,7 @@ Token Lexer::lexWord() {
             .numberValue = *regIndex
         };
     }
-    // имя SCR сразу преобразуется в архитектурный индекс и хранится аналогично номеру обычного регистра
+    // имя SCR сразу преобразуется в архитектурный индекс, но остается отдельным типом токена
     else if (const auto statusRegister = common::statusRegisterFromString(upperLexeme)) {
         return Token{
             .type = TokenType::StatusRegister,

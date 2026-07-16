@@ -32,6 +32,18 @@ namespace {
     throw std::runtime_error("invalid opcode");
 }
 
+[[noreturn]] void throwInvalidStatusRegisterIndex() {
+    throw std::runtime_error("invalid status register index");
+}
+
+[[noreturn]] void throwStackOverflow() {
+    throw std::runtime_error("stack overflow");
+}
+
+[[noreturn]] void throwStackUnderflow() {
+    throw std::runtime_error("stack underflow");
+}
+
 }
 
 Emulator::Emulator(std::size_t memorySize)
@@ -69,6 +81,8 @@ void Emulator::loadProgram(const std::vector<std::uint8_t>& program, std::uint32
 
     registers_.fill(0);
     assemblerTempRegister_ = 0;
+    stackBottom_ = 0;
+    statusRegisters_.fill(0);
     memory_.clear();
 
     memory_.load(program, baseAddress);
@@ -133,6 +147,67 @@ inline void Emulator::writeRegister(std::uint8_t reg, std::uint32_t value) {
         return;
     }
     registers_[reg] = value;
+}
+
+inline std::uint32_t Emulator::readStatusRegister(common::StatusRegister reg) const {
+    const std::size_t index = common::statusRegisterIndex(reg);
+
+    // нулевой индекс пока зарезервирован под IP, который будет добавлен вместе с переходами
+    if (index == 0 || index >= statusRegisters_.size()) [[unlikely]] {
+        throwInvalidStatusRegisterIndex();
+    }
+
+    return statusRegisters_[index];
+}
+
+inline void Emulator::writeStatusRegister(common::StatusRegister reg, std::uint32_t value) {
+    const std::size_t index = common::statusRegisterIndex(reg);
+
+    if (index == 0 || index >= statusRegisters_.size()) [[unlikely]] {
+        throwInvalidStatusRegisterIndex();
+    }
+
+    statusRegisters_[index] = value;
+}
+
+void Emulator::advanceStackPointer(std::uint8_t destination, std::int64_t delta) {
+    validateRegisterIndex(destination, "destination");
+
+    // delta уже расширен до int64_t, поэтому -INT32_MIN не вызывает знаковое переполнение
+    const std::uint32_t spTop = readStatusRegister(common::StatusRegister::SpTop);
+    const std::uint32_t spSize = readStatusRegister(common::StatusRegister::SpSize);
+    if (delta < 0) {
+        const std::int64_t allocation = -delta;
+        if (allocation > spSize) [[unlikely]] {
+            throwStackOverflow();
+        }
+    }
+
+    // положительное смещение не должно переносить SP_TOP выше исходного начала стека
+    const std::int64_t newTopValue = static_cast<std::int64_t>(spTop) + delta;
+    if (delta > 0 && newTopValue > stackBottom_) [[unlikely]] {
+        throwStackUnderflow();
+    }
+
+    // регистры архитектурно 32-битные, итоговое присваивание сохраняет wrap-around семантику
+    const std::uint32_t newTop = static_cast<std::uint32_t>(newTopValue);
+    const std::uint32_t newSize = static_cast<std::uint32_t>(spSize + delta);
+
+    // обработка освобождённой памяти идёт до изменения SCR, чтобы ошибка диапазона не оставила частичное состояние
+    if (delta > 0) {
+        const std::size_t releasedSize = static_cast<std::size_t>(delta);
+        if (clearStack_) {
+            // при очистке стека нули и признаки инициализации сбрасываются за один проход по блокам
+            memory_.clearAndMarkUninitialized(spTop, releasedSize);
+        }
+        else {
+            memory_.markUninitialized(spTop, releasedSize);
+        }
+    }
+
+    writeStatusRegister(common::StatusRegister::SpTop, newTop);
+    writeStatusRegister(common::StatusRegister::SpSize, newSize);
+    writeRegister(destination, newTop);
 }
 
 namespace {
@@ -237,6 +312,10 @@ inline std::uint32_t byteSwap(std::uint32_t value, std::uint8_t mode) {
 
 }
 
+void Emulator::enableClearStack() {
+    clearStack_ = true;
+}
+
 void Emulator::enableUninitializedRamWarnings(std::ostream& output) {
     uninitRamWarningOutput_ = &output;
     memory_.setUninitReadHandler([this](
@@ -328,8 +407,15 @@ Emulator::TraceSnapshot Emulator::captureTraceSnapshot(const DecodedInstruction&
             snapshot.b = readIfValid(instruction.b);
             break;
 
+        case common::Opcode::SCRW:
+        case common::Opcode::ASPR:
+            snapshot.b = readIfValid(instruction.b);
+            break;
+
         case common::Opcode::LI:
         case common::Opcode::LUI:
+        case common::Opcode::ASPI:
+        case common::Opcode::SCRR:
             break;
     }
 
@@ -520,6 +606,42 @@ void Emulator::execute(const DecodedInstruction& instruction) {
             }
 
             writeRegister(instruction.a, result);
+            advancePc();
+            return;
+        }
+        case common::Opcode::SCRW: {
+            validateRegisterIndex(instruction.b, "source");
+
+            const auto statusRegister = static_cast<common::StatusRegister>(instruction.a);
+            const std::uint32_t value = readRegister(instruction.b);
+            writeStatusRegister(statusRegister, value);
+            if (statusRegister == common::StatusRegister::SpTop) {
+                stackBottom_ = value;
+            }
+            advancePc();
+            return;
+        }
+        case common::Opcode::SCRR: {
+            validateRegisterIndex(instruction.a, "destination");
+
+            const auto statusRegister = static_cast<common::StatusRegister>(instruction.b);
+            writeRegister(instruction.a, readStatusRegister(statusRegister));
+            advancePc();
+            return;
+        }
+        case common::Opcode::ASPI:
+            // signExtendBits строит 32-битное представление, которое затем интерпретируется как int32_t
+            advanceStackPointer(
+                instruction.a,
+                static_cast<std::int32_t>(signExtendBits(instruction.imm, 16))
+            );
+            advancePc();
+            return;
+        case common::Opcode::ASPR: {
+            validateRegisterIndex(instruction.b, "source");
+            // значение регистра уже имеет ширину 32 бита, поэтому дополнительное расширение не требуется
+            const std::int64_t delta = static_cast<std::int32_t>(readRegister(instruction.b));
+            advanceStackPointer(instruction.a, delta);
             advancePc();
             return;
         }

@@ -19,7 +19,9 @@ enum class OptionName {
     RamSize,
     TraceRamAddresses,
     Warn,
-    Help
+    Help,
+    ClearStack,
+    Count
 };
 
 struct OptionSpec {
@@ -42,14 +44,15 @@ constexpr std::array optionSpecs = {
     OptionSpec{"--ram-size=", OptionName::RamSize, "--ram-size", true},
     OptionSpec{"--trace-ram-addrs=", OptionName::TraceRamAddresses, "--trace-ram-addrs", true},
     OptionSpec{"--warn=", OptionName::Warn, "--warn", true},
-    OptionSpec{"--help", OptionName::Help, "--help", false}
+    OptionSpec{"--help", OptionName::Help, "--help", false},
+    OptionSpec{"--clear-stack", OptionName::ClearStack, "--clear-stack", false},
 };
 
 constexpr std::size_t optionIndex(OptionName name) noexcept {
     return static_cast<std::size_t>(name);
 }
 
-constexpr std::size_t optionCount = optionIndex(OptionName::Help) + 1;
+constexpr std::size_t optionCount = optionIndex(OptionName::Count);
 static_assert(optionSpecs.size() == optionCount);
 
 // определяет только имя опции и отделяет значение после '=', само значение парсится отдельно
@@ -251,6 +254,9 @@ CommandLineOptions parseCommandLine(int argc, char* argv[]) {
                 case OptionName::Help:
                     options.isNeedHelp = true;
                     break;
+                case OptionName::ClearStack:
+                    options.clearStack = true;
+                    break;
                 case OptionName::Trace:
                     parseTraceModes(options.trace, parsed->value);
                     break;
@@ -268,6 +274,8 @@ CommandLineOptions parseCommandLine(int argc, char* argv[]) {
                 case OptionName::Warn:
                     parseWarnings(options.warnings, parsed->value);
                     break;
+                case OptionName::Count:
+                    throw std::logic_error("unreachable command line option sentinel");
             }
         }
         else if (argument.starts_with('-')) {

@@ -1,5 +1,6 @@
 #include "opMemory.h"
 
+#include <algorithm>
 #include <limits>
 #include <stdexcept>
 #include <utility>
@@ -272,12 +273,110 @@ void Memory::setUninitReadHandler(UninitReadHandler handler) {
     cellReadHandler_ = std::move(handler);
 }
 
+void Memory::clearRange(std::uint32_t address, std::size_t byteCount) {
+    clearRangeImpl(address, byteCount, false);
+}
 
+void Memory::clearAndMarkUninitialized(std::uint32_t address, std::size_t byteCount) {
+    clearRangeImpl(address, byteCount, true);
+}
+
+void Memory::markUninitialized(std::uint32_t address, std::size_t byteCount) {
+    checkRange(address, byteCount);
+
+    if (byteCount == 0) {
+        return;
+    }
+
+    std::size_t marked = 0;
+    while (marked < byteCount) {
+        const std::uint32_t currentAddress = address + static_cast<std::uint32_t>(marked);
+        const std::size_t blockOffset = blockOffsetForAddress(currentAddress);
+        const std::size_t bytesInBlock = std::min(
+            byteCount - marked,
+            blockSize - blockOffset
+        );
+        const auto blockIt = blocks_.find(blockIndexForAddress(currentAddress));
+
+        // байты отсутствующего разреженного блока уже считаются неинициализированными
+        if (blockIt != blocks_.end()) {
+            resetInitializedInBlock(blockIt->second, blockOffset, bytesInBlock);
+        }
+
+        marked += bytesInBlock;
+    }
+}
 
 void Memory::checkRange(std::uint32_t address, std::size_t accessSize) const {
     // не считаем address + accessSize напрямую, чтобы не получить переполнение
     if (accessSize > size_ || static_cast<std::size_t>(address) > size_ - accessSize) [[unlikely]] {
         throwMemoryRangeAccessOutOfRange();
+    }
+}
+
+void Memory::clearRangeImpl(std::uint32_t address, std::size_t byteCount, bool resetInitialized) {
+    checkRange(address, byteCount);
+
+    if (byteCount == 0) {
+        return;
+    }
+
+    const bool traceWrites = static_cast<bool>(cellWriteHandler_);
+
+    std::size_t cleared = 0;
+    while (cleared < byteCount) {
+        const std::uint32_t currentAddress = address + static_cast<std::uint32_t>(cleared);
+        const std::uint32_t blockIndex = blockIndexForAddress(currentAddress);
+        const std::size_t blockOffset = blockOffsetForAddress(currentAddress);
+        const std::size_t bytesInBlock = std::min(
+            byteCount - cleared,
+            blockSize - blockOffset
+        );
+        const auto blockIt = blocks_.find(blockIndex);
+
+        // отсутствующий разреженный блок уже содержит нули и считается неинициализированным
+        if (blockIt == blocks_.end()) {
+            cleared += bytesInBlock;
+            continue;
+        }
+
+        Block& block = blockIt->second;
+        if (!traceWrites) [[likely]] {
+            clearBytesInBlock(block, blockOffset, bytesInBlock);
+        }
+        else {
+            // RAM trace требует отдельного old -> new события для каждой затронутой ячейки
+            std::size_t clearedInBlock = 0;
+            while (clearedInBlock < bytesInBlock) {
+                const std::size_t currentOffset = blockOffset + clearedInBlock;
+                const std::size_t cellOffset = currentOffset & (cellSize - 1);
+                const std::size_t bytesInCell = std::min(
+                    bytesInBlock - clearedInBlock,
+                    cellSize - cellOffset
+                );
+                const std::size_t cellIndexInBlock = currentOffset >> cellShift;
+                const std::uint32_t oldData = block.cells[cellIndexInBlock];
+
+                clearBytesInCell(block.cells[cellIndexInBlock], cellOffset, bytesInCell);
+
+                cellWriteHandler_(
+                    static_cast<std::uint32_t>(
+                        (static_cast<std::size_t>(blockIndex) << blockShift) +
+                        cellIndexInBlock * cellSize
+                    ),
+                    oldData,
+                    block.cells[cellIndexInBlock]
+                );
+                clearedInBlock += bytesInCell;
+            }
+        }
+
+        if (resetInitialized) {
+            // при совместной очистке значения и признаки инициализации сбрасываются за один проход по блокам
+            resetInitializedInBlock(block, blockOffset, bytesInBlock);
+        }
+
+        cleared += bytesInBlock;
     }
 }
 
@@ -390,10 +489,70 @@ inline void Memory::writeByteToBlock(Block& block, std::size_t blockOffset, std:
                              (static_cast<std::uint32_t>(value) << shift);
 }
 
+// получаю маску под конкретные байты std::uint32_t числа
+inline std::uint32_t Memory::byteRangeMask(std::size_t byteOffset, std::size_t byteCount) noexcept {
+    if (byteCount == cellSize) {
+        return ~std::uint32_t{0};
+    }
+
+    return ((std::uint32_t{1} << (byteCount * 8)) - 1u) << (byteOffset * 8);
+}
+
+inline void Memory::clearBytesInCell(
+    std::uint32_t& cell,
+    std::size_t byteOffset,
+    std::size_t byteCount
+) noexcept {
+    // очищаю логические байты ячейки через маску, не завися от endian хоста
+    cell &= ~byteRangeMask(byteOffset, byteCount);
+}
+
+void Memory::clearBytesInBlock(Block& block, std::size_t blockOffset, std::size_t byteCount) noexcept {
+    // диапазон уже лежит внутри одного блока, поэтому можно работать без поиска в unordered_map
+    if (blockOffset == 0 && byteCount == blockSize) {
+        block.cells.fill(0);
+        return;
+    }
+
+    std::size_t cleared = 0;
+    // очищаю в пределах одной ячейки
+    if ((blockOffset & cellMask) != 0) {
+        const std::size_t cellOffset = blockOffset & cellMask;
+        const std::size_t bytesInCell = std::min(byteCount, cellSize - cellOffset);
+        clearBytesInCell(block.cells[blockOffset >> cellShift], cellOffset, bytesInCell);
+        cleared += bytesInCell;
+    }
+
+    const std::size_t firstFullCell = (blockOffset + cleared) >> cellShift;
+    const std::size_t fullCellCount = (byteCount - cleared) >> cellShift;
+    if (fullCellCount != 0) {
+        // большие середины диапазона чистятся сразу по 32-битным ячейкам, а не по байтам
+        std::fill_n(block.cells.begin() + static_cast<std::ptrdiff_t>(firstFullCell), fullCellCount, 0);
+        cleared += fullCellCount * cellSize;
+    }
+    // очищаю в последней ячейке
+    if (cleared < byteCount) {
+        const std::size_t currentOffset = blockOffset + cleared;
+        clearBytesInCell(block.cells[currentOffset >> cellShift], 0, byteCount - cleared);
+    }
+}
+
 void Memory::markInitializedInBlock(Block& block, std::size_t blockOffset, std::size_t byteCount) {
     // сюда передается диапазон, который точно лежит внутри одного блока
     for (std::size_t i = 0; i < byteCount; ++i) {
         block.initialized.set(blockOffset + i);
+    }
+}
+
+void Memory::resetInitializedInBlock(Block& block, std::size_t blockOffset, std::size_t byteCount) {
+    // полный блок сбрасывается одним вызовом bitset::reset, частичные края остаются побайтовыми
+    if (blockOffset == 0 && byteCount == blockSize) {
+        block.initialized.reset();
+        return;
+    }
+
+    for (std::size_t i = 0; i < byteCount; ++i) {
+        block.initialized.reset(blockOffset + i);
     }
 }
 

@@ -100,9 +100,6 @@ namespace common {
         if (lexeme == "SP_SIZE") {
             return StatusRegister::SpSize;
         }
-        if (lexeme == "SP_BOTTOM") {
-            return StatusRegister::SpBottom;
-        }
         return std::nullopt;
     }
 
@@ -178,7 +175,7 @@ namespace common {
         switch (reg) {
             case StatusRegister::SpTop: return "SP_TOP";
             case StatusRegister::SpSize: return "SP_SIZE";
-            case StatusRegister::SpBottom: return "SP_BOTTOM";
+            case StatusRegister::Count: break;
         }
 
         return "UNKNOWN";

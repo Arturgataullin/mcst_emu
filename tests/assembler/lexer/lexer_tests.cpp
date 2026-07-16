@@ -476,10 +476,10 @@ TEST_CASE("lexer tokenizes multiple instructions") {
 }
 
 TEST_CASE("lexer tokenizes stack status registers") {
-    Lexer lexer("SP_TOP SP_SIZE SP_BOTTOM");
+    Lexer lexer("SP_TOP SP_SIZE");
     const auto tokens = lexer.tokenize();
 
-    REQUIRE(tokens.size() == 4);
+    REQUIRE(tokens.size() == 3);
 
     CHECK(tokens[0].type == TokenType::StatusRegister);
     CHECK(tokens[0].lexeme == "SP_TOP");
@@ -491,12 +491,7 @@ TEST_CASE("lexer tokenizes stack status registers") {
     REQUIRE(tokens[1].numberValue.has_value());
     CHECK(tokens[1].numberValue.value() == 2);
 
-    CHECK(tokens[2].type == TokenType::StatusRegister);
-    CHECK(tokens[2].lexeme == "SP_BOTTOM");
-    REQUIRE(tokens[2].numberValue.has_value());
-    CHECK(tokens[2].numberValue.value() == 3);
-
-    CHECK(tokens[3].type == TokenType::EndOfFile);
+    CHECK(tokens[2].type == TokenType::EndOfFile);
 }
 
 TEST_CASE("lexer rejects unknown stack status register") {

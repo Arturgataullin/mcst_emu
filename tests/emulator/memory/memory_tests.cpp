@@ -353,3 +353,153 @@ TEST_CASE("memory throws when load exceeds memory size") {
         ContainsSubstring("out of range")
     );
 }
+
+TEST_CASE("memory clears only the requested bytes and can mark them uninitialized") {
+    emulator::Memory memory(16);
+    std::vector<UninitReadEvent> events;
+
+    memory.write32(0, 0x44332211);
+    memory.write32(4, 0x88776655);
+    memory.clearAndMarkUninitialized(1, 5);
+
+    REQUIRE(memory.read32(0) == 0x00000011u);
+    REQUIRE(memory.read32(4) == 0x88770000u);
+
+    memory.setUninitReadHandler([&events](
+        std::uint32_t address,
+        std::size_t size,
+        std::uint8_t mask
+    ) {
+        events.push_back({address, size, mask});
+    });
+
+    REQUIRE(memory.read32(0) == 0x00000011u);
+    REQUIRE(memory.read32(4) == 0x88770000u);
+    REQUIRE(events.size() == 2);
+    REQUIRE(events[0].address == 0u);
+    REQUIRE(events[0].size == 4u);
+    REQUIRE(events[0].mask == 0b1110);
+    REQUIRE(events[1].address == 4u);
+    REQUIRE(events[1].size == 4u);
+    REQUIRE(events[1].mask == 0b0011);
+}
+
+TEST_CASE("memory clearing reports one write event per touched cell when tracing is enabled") {
+    emulator::Memory memory(8);
+    std::vector<CellWriteEvent> events;
+
+    memory.write32(0, 0x44332211);
+    memory.write32(4, 0x88776655);
+    memory.setCellWriteHandler([&events](
+        std::uint32_t address,
+        std::uint32_t oldData,
+        std::uint32_t newData
+    ) {
+        events.push_back({address, oldData, newData});
+    });
+
+    memory.clearRange(1, 5);
+
+    REQUIRE(memory.read32(0) == 0x00000011u);
+    REQUIRE(memory.read32(4) == 0x88770000u);
+    REQUIRE(events.size() == 2);
+    REQUIRE(events[0].address == 0u);
+    REQUIRE(events[0].oldData == 0x44332211u);
+    REQUIRE(events[0].newData == 0x00000011u);
+    REQUIRE(events[1].address == 4u);
+    REQUIRE(events[1].oldData == 0x88776655u);
+    REQUIRE(events[1].newData == 0x88770000u);
+}
+
+TEST_CASE("memory clears and marks a whole block without RAM tracing") {
+    emulator::Memory memory(emulator::Memory::blockSize);
+    std::vector<UninitReadEvent> events;
+    constexpr std::uint32_t middleAddress =
+        static_cast<std::uint32_t>(emulator::Memory::blockSize / 2);
+    constexpr std::uint32_t lastWordAddress =
+        static_cast<std::uint32_t>(emulator::Memory::blockSize - 4);
+
+    memory.write32(0, 0x11223344);
+    memory.write32(middleAddress, 0x55667788);
+    memory.write32(lastWordAddress, 0x99AABBCC);
+    memory.clearAndMarkUninitialized(0, emulator::Memory::blockSize);
+    memory.setUninitReadHandler([&events](
+        std::uint32_t address,
+        std::size_t size,
+        std::uint8_t mask
+    ) {
+        events.push_back({address, size, mask});
+    });
+
+    REQUIRE(memory.read32(0) == 0u);
+    REQUIRE(memory.read32(middleAddress) == 0u);
+    REQUIRE(memory.read32(lastWordAddress) == 0u);
+    REQUIRE(events.size() == 3);
+    REQUIRE(events[0].mask == 0b1111);
+    REQUIRE(events[1].mask == 0b1111);
+    REQUIRE(events[2].mask == 0b1111);
+}
+
+TEST_CASE("memory clears a large unaligned range across several blocks") {
+    constexpr std::size_t memorySize = emulator::Memory::blockSize * 3;
+    constexpr std::uint32_t middleAddress =
+        static_cast<std::uint32_t>(emulator::Memory::blockSize + 4);
+    constexpr std::uint32_t penultimateAddress =
+        static_cast<std::uint32_t>(memorySize - 2);
+    constexpr std::uint32_t lastAddress =
+        static_cast<std::uint32_t>(memorySize - 1);
+    emulator::Memory memory(memorySize);
+
+    memory.write8(0, 0xAA);
+    memory.write8(1, 0xBB);
+    memory.write32(middleAddress, 0x11223344);
+    memory.write8(penultimateAddress, 0xCC);
+    memory.write8(lastAddress, 0xDD);
+
+    // Диапазон оставляет нетронутыми первый и последний байты RAM.
+    memory.clearAndMarkUninitialized(1, memorySize - 2);
+
+    REQUIRE(memory.read8(0) == 0xAAu);
+    REQUIRE(memory.read8(1) == 0u);
+    REQUIRE(memory.read32(middleAddress) == 0u);
+    REQUIRE(memory.read8(penultimateAddress) == 0u);
+    REQUIRE(memory.read8(lastAddress) == 0xDDu);
+}
+
+TEST_CASE("marking memory uninitialized preserves its data") {
+    emulator::Memory memory(8);
+    std::vector<UninitReadEvent> events;
+
+    memory.write32(0, 0x44332211);
+    memory.markUninitialized(1, 2);
+    memory.setUninitReadHandler([&events](
+        std::uint32_t address,
+        std::size_t size,
+        std::uint8_t mask
+    ) {
+        events.push_back({address, size, mask});
+    });
+
+    REQUIRE(memory.read32(0) == 0x44332211u);
+    REQUIRE(events.size() == 1);
+    REQUIRE(events[0].mask == 0b0110);
+}
+
+TEST_CASE("memory rejects out of range clearing without changing data") {
+    emulator::Memory memory(4);
+    memory.write32(0, 0x11223344);
+
+    REQUIRE_THROWS_WITH(
+        memory.clearRange(2, 3),
+        ContainsSubstring("out of range")
+    );
+    REQUIRE_THROWS_WITH(
+        memory.markUninitialized(2, 3),
+        ContainsSubstring("out of range")
+    );
+    REQUIRE_THROWS_WITH(
+        memory.clearAndMarkUninitialized(2, 3),
+        ContainsSubstring("out of range")
+    );
+    REQUIRE(memory.read32(0) == 0x11223344u);
+}
