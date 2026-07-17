@@ -27,6 +27,10 @@ namespace common {
     constexpr std::uint8_t assemblerTempRegister = 31;
     static_assert(assemblerTempRegister >= registerCount);
 
+    // CALL сохраняет адрес возврата в этот регистр, а RET раскрывается в переход по нему
+    constexpr std::uint8_t returnAddressRegister = 1;
+    static_assert(returnAddressRegister < registerCount);
+
     enum class Operation {
         LI,
         LUI,
@@ -54,11 +58,25 @@ namespace common {
         SCRR,
         ASPI,
         ASPR,
+        // команды переходов
+        RJMP,
+        BRZ,
+        BRNZ,
+        AJMP,
+        CALL,
+        // команды сравнения
+        EQ,
+        NE,
+        LT,
+        GE,
+        SLT,
+        SGE,
         // pseudo commands
         MOV,
         NEG,
         NOT,
-        LFI
+        LFI,
+        RET
     };
 
     enum class Opcode : uint8_t {
@@ -87,7 +105,20 @@ namespace common {
         SCRW = 0x20,
         SCRR = 0x21,
         ASPI = 0x22,
-        ASPR = 0x23
+        ASPR = 0x23,
+        // диапазон 0x30-0x34 выделен под переходы
+        RJMP = 0x30,
+        BRZ = 0x31,
+        BRNZ = 0x32,
+        AJMP = 0x33,
+        CALL = 0x34,
+        // диапазон 0x40-0x45 выделен под сравнения
+        EQ = 0x40,
+        NE = 0x41,
+        LT = 0x42,
+        GE = 0x43,
+        SLT = 0x44,
+        SGE = 0x45
     };
 
     // индекс является частью машинной кодировки операнда SCR

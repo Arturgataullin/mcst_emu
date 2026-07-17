@@ -1,6 +1,7 @@
 build/
 build-no-trace/
 build-release/
+build-profile/
 *.o
 exaples/*.o
 .vscode/

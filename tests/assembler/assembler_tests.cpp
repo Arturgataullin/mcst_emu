@@ -157,6 +157,48 @@ TEST_CASE("assembler encodes all real register instructions") {
     REQUIRE(readBinaryFile(outputPath) == expected);
 }
 
+TEST_CASE("assembler encodes control flow and comparison instructions") {
+    const TemporaryDirectory temp("assembler_tests_control_flow_compare");
+    const fs::path& tempDir = temp.path();
+
+    const fs::path inputPath = tempDir / "in.s";
+    const fs::path outputPath = tempDir / "out.o";
+
+    const std::string source =
+        "RJMP 0xfffe\n"
+        "BRZ R1 0x0002\n"
+        "BRNZ R2 0xffff\n"
+        "AJMP R3\n"
+        "CALL R4\n"
+        "EQ R1 R2 R3\n"
+        "NE R4 R5 R6\n"
+        "LT R7 R8 R9\n"
+        "GE R10 R11 R12\n"
+        "SLT R13 R14 R15\n"
+        "SGE R0 R1 R2\n";
+
+    writeTextFile(inputPath, source);
+
+    assembler::Assembler assembler;
+    assembler.assembleFile(inputPath.string(), outputPath.string());
+
+    const std::vector<std::uint8_t> expected = {
+        0x30, 0x00, 0xfe, 0xff,
+        0x31, 0x01, 0x02, 0x00,
+        0x32, 0x02, 0xff, 0xff,
+        0x33, 0x03, 0x00, 0x00,
+        0x34, 0x04, 0x00, 0x00,
+        0x40, 0x01, 0x02, 0x03,
+        0x41, 0x04, 0x05, 0x06,
+        0x42, 0x07, 0x08, 0x09,
+        0x43, 0x0a, 0x0b, 0x0c,
+        0x44, 0x0d, 0x0e, 0x0f,
+        0x45, 0x00, 0x01, 0x02
+    };
+
+    REQUIRE(readBinaryFile(outputPath) == expected);
+}
+
 TEST_CASE("assembler lowers pseudo instructions into expected bytes") {
     const TemporaryDirectory temp("assembler_tests_assemble_pseudo_operations");
     const fs::path& tempDir = temp.path();
@@ -168,7 +210,8 @@ TEST_CASE("assembler lowers pseudo instructions into expected bytes") {
         "MOV R1 R2\n"
         "NEG R3 R4\n"
         "NOT R5\n"
-        "LFI R6 0x12345678\n";
+        "LFI R6 0x12345678\n"
+        "RET\n";
 
     writeTextFile(inputPath, source);
 
@@ -176,6 +219,7 @@ TEST_CASE("assembler lowers pseudo instructions into expected bytes") {
     assembler.assembleFile(inputPath.string(), outputPath.string());
 
     const std::uint8_t tempRegister = common::assemblerTempRegister;
+    const std::uint8_t returnRegister = common::returnAddressRegister;
     const std::vector<std::uint8_t> expected = {
         0x05, 0x01, 0x02, 0x02,       // MOV -> OR R1 R2 R2
         0x00, tempRegister, 0x00, 0x00, // NEG -> LI temp 0
@@ -184,7 +228,8 @@ TEST_CASE("assembler lowers pseudo instructions into expected bytes") {
         0x01, tempRegister, 0xFF, 0xFF, //        LUI temp 0xFFFF
         0x06, 0x05, 0x05, tempRegister, //        XOR R5 R5 temp
         0x00, 0x06, 0x78, 0x56,       // LFI -> LI R6 0x5678
-        0x01, 0x06, 0x34, 0x12        //        LUI R6 0x1234
+        0x01, 0x06, 0x34, 0x12,       //        LUI R6 0x1234
+        0x33, returnRegister, 0x00, 0x00 // RET -> AJMP return register
     };
 
     REQUIRE(readBinaryFile(outputPath) == expected);

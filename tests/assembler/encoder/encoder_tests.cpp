@@ -165,6 +165,42 @@ Instruction makeRegisterImmediate(
     return inst;
 }
 
+Instruction makeImmediateInstruction(common::Operation operation, std::uint32_t imm) {
+    Instruction inst;
+    inst.operation = operation;
+    inst.operands.push_back(ImmediateOperand{imm});
+    return inst;
+}
+
+Instruction makeRegisterImmediate16(common::Operation operation, std::uint8_t reg, std::uint32_t imm) {
+    Instruction inst;
+    inst.operation = operation;
+    inst.operands.push_back(RegisterOperand{reg});
+    inst.operands.push_back(ImmediateOperand{imm});
+    return inst;
+}
+
+Instruction makeRegisterOnly(common::Operation operation, std::uint8_t reg) {
+    Instruction inst;
+    inst.operation = operation;
+    inst.operands.push_back(RegisterOperand{reg});
+    return inst;
+}
+
+Instruction makeRegisterRegisterRegister(
+    common::Operation operation,
+    std::uint8_t ra,
+    std::uint8_t rb,
+    std::uint8_t rc
+) {
+    Instruction inst;
+    inst.operation = operation;
+    inst.operands.push_back(RegisterOperand{ra});
+    inst.operands.push_back(RegisterOperand{rb});
+    inst.operands.push_back(RegisterOperand{rc});
+    return inst;
+}
+
 Instruction makeStackInstruction(
     common::Operation operation,
     Operand first,
@@ -398,6 +434,48 @@ TEST_CASE("encoder encodes memory-format instructions") {
         0x15, 0x06, 0x07, 0x85,
         0x16, 0x07, 0x08, 0x86,
         0x17, 0x08, 0x09, 0x87
+    };
+
+    REQUIRE(bytes == expected);
+}
+
+TEST_CASE("encoder encodes control flow instructions") {
+    Program program;
+    program.instructions.push_back(makeImmediateInstruction(common::Operation::RJMP, 0xfffe));
+    program.instructions.push_back(makeRegisterImmediate16(common::Operation::BRZ, 1, 0x0002));
+    program.instructions.push_back(makeRegisterImmediate16(common::Operation::BRNZ, 2, 0xffff));
+    program.instructions.push_back(makeRegisterOnly(common::Operation::AJMP, 3));
+    program.instructions.push_back(makeRegisterOnly(common::Operation::CALL, 4));
+
+    const std::vector<std::uint8_t> bytes = Encoder{}.encode(program);
+    const std::vector<std::uint8_t> expected = {
+        0x30, 0x00, 0xfe, 0xff,
+        0x31, 0x01, 0x02, 0x00,
+        0x32, 0x02, 0xff, 0xff,
+        0x33, 0x03, 0x00, 0x00,
+        0x34, 0x04, 0x00, 0x00
+    };
+
+    REQUIRE(bytes == expected);
+}
+
+TEST_CASE("encoder encodes comparison instructions") {
+    Program program;
+    program.instructions.push_back(makeRegisterRegisterRegister(common::Operation::EQ, 1, 2, 3));
+    program.instructions.push_back(makeRegisterRegisterRegister(common::Operation::NE, 4, 5, 6));
+    program.instructions.push_back(makeRegisterRegisterRegister(common::Operation::LT, 7, 8, 9));
+    program.instructions.push_back(makeRegisterRegisterRegister(common::Operation::GE, 10, 11, 12));
+    program.instructions.push_back(makeRegisterRegisterRegister(common::Operation::SLT, 13, 14, 15));
+    program.instructions.push_back(makeRegisterRegisterRegister(common::Operation::SGE, 0, 1, 2));
+
+    const std::vector<std::uint8_t> bytes = Encoder{}.encode(program);
+    const std::vector<std::uint8_t> expected = {
+        0x40, 0x01, 0x02, 0x03,
+        0x41, 0x04, 0x05, 0x06,
+        0x42, 0x07, 0x08, 0x09,
+        0x43, 0x0a, 0x0b, 0x0c,
+        0x44, 0x0d, 0x0e, 0x0f,
+        0x45, 0x00, 0x01, 0x02
     };
 
     REQUIRE(bytes == expected);
@@ -650,7 +728,7 @@ TEST_CASE("encoder rejects invalid status register index") {
     Program program;
     program.instructions.push_back(makeStackInstruction(
         common::Operation::SCRW,
-        StatusRegisterOperand{static_cast<common::StatusRegister>(6)},
+        StatusRegisterOperand{static_cast<common::StatusRegister>(0)},
         RegisterOperand{5}
     ));
 

@@ -77,6 +77,39 @@ namespace common {
         if (lexeme == "ASPR") {
             return Operation::ASPR;
         }
+        if (lexeme == "RJMP") {
+            return Operation::RJMP;
+        }
+        if (lexeme == "BRZ") {
+            return Operation::BRZ;
+        }
+        if (lexeme == "BRNZ") {
+            return Operation::BRNZ;
+        }
+        if (lexeme == "AJMP") {
+            return Operation::AJMP;
+        }
+        if (lexeme == "CALL") {
+            return Operation::CALL;
+        }
+        if (lexeme == "EQ") {
+            return Operation::EQ;
+        }
+        if (lexeme == "NE") {
+            return Operation::NE;
+        }
+        if (lexeme == "LT") {
+            return Operation::LT;
+        }
+        if (lexeme == "GE") {
+            return Operation::GE;
+        }
+        if (lexeme == "SLT") {
+            return Operation::SLT;
+        }
+        if (lexeme == "SGE") {
+            return Operation::SGE;
+        }
         if (lexeme == "MOV") {
             return Operation::MOV;
         }
@@ -88,6 +121,9 @@ namespace common {
         }
         if (lexeme == "LFI") {
             return Operation::LFI;
+        }
+        if (lexeme == "RET") {
+            return Operation::RET;
         }
 
         return std::nullopt;
@@ -130,10 +166,22 @@ namespace common {
             case Operation::SCRR: return "SCRR";
             case Operation::ASPI: return "ASPI";
             case Operation::ASPR: return "ASPR";
+            case Operation::RJMP: return "RJMP";
+            case Operation::BRZ: return "BRZ";
+            case Operation::BRNZ: return "BRNZ";
+            case Operation::AJMP: return "AJMP";
+            case Operation::CALL: return "CALL";
+            case Operation::EQ: return "EQ";
+            case Operation::NE: return "NE";
+            case Operation::LT: return "LT";
+            case Operation::GE: return "GE";
+            case Operation::SLT: return "SLT";
+            case Operation::SGE: return "SGE";
             case Operation::MOV:  return "MOV";
             case Operation::NEG:  return "NEG";
             case Operation::NOT: return "NOT";
             case Operation::LFI: return "LFI";
+            case Operation::RET: return "RET";
         }
 
         return "UNKNOWN";
@@ -166,6 +214,17 @@ namespace common {
             case Opcode::SCRR: return "SCRR";
             case Opcode::ASPI: return "ASPI";
             case Opcode::ASPR: return "ASPR";
+            case Opcode::RJMP: return "RJMP";
+            case Opcode::BRZ: return "BRZ";
+            case Opcode::BRNZ: return "BRNZ";
+            case Opcode::AJMP: return "AJMP";
+            case Opcode::CALL: return "CALL";
+            case Opcode::EQ: return "EQ";
+            case Opcode::NE: return "NE";
+            case Opcode::LT: return "LT";
+            case Opcode::GE: return "GE";
+            case Opcode::SLT: return "SLT";
+            case Opcode::SGE: return "SGE";
         }
 
         return "UNKNOWN";
@@ -208,6 +267,17 @@ namespace common {
             case Operation::SCRR: return Opcode::SCRR;
             case Operation::ASPI: return Opcode::ASPI;
             case Operation::ASPR: return Opcode::ASPR;
+            case Operation::RJMP: return Opcode::RJMP;
+            case Operation::BRZ: return Opcode::BRZ;
+            case Operation::BRNZ: return Opcode::BRNZ;
+            case Operation::AJMP: return Opcode::AJMP;
+            case Operation::CALL: return Opcode::CALL;
+            case Operation::EQ: return Opcode::EQ;
+            case Operation::NE: return Opcode::NE;
+            case Operation::LT: return Opcode::LT;
+            case Operation::GE: return Opcode::GE;
+            case Operation::SLT: return Opcode::SLT;
+            case Operation::SGE: return Opcode::SGE;
             default:
                 throw std::logic_error("unknown operation");
         }

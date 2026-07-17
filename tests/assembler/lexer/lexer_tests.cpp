@@ -475,7 +475,7 @@ TEST_CASE("lexer tokenizes multiple instructions") {
     CHECK(tokens[9].type == TokenType::EndOfFile);
 }
 
-TEST_CASE("lexer tokenizes stack status registers") {
+TEST_CASE("lexer tokenizes status registers") {
     Lexer lexer("SP_TOP SP_SIZE");
     const auto tokens = lexer.tokenize();
 

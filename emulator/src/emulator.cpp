@@ -111,7 +111,8 @@ bool Emulator::isFinished() const noexcept {
 }
 
 std::uint32_t Emulator::fetchInstructionWord() const {
-    if (pc_ + common::instructionSizeBytes > programEnd_) [[unlikely]] {
+    if (pc_ < programBase_ || pc_ > programEnd_ ||
+        programEnd_ - pc_ < common::instructionSizeBytes) [[unlikely]] {
         throwInstructionFetchGoesPastLoadedProgram();
     }
 
@@ -152,7 +153,6 @@ inline void Emulator::writeRegister(std::uint8_t reg, std::uint32_t value) {
 inline std::uint32_t Emulator::readStatusRegister(common::StatusRegister reg) const {
     const std::size_t index = common::statusRegisterIndex(reg);
 
-    // нулевой индекс пока зарезервирован под IP, который будет добавлен вместе с переходами
     if (index == 0 || index >= statusRegisters_.size()) [[unlikely]] {
         throwInvalidStatusRegisterIndex();
     }
@@ -273,6 +273,17 @@ inline std::uint32_t signExtendBits(std::uint32_t value, unsigned bits) {
     return (value ^ signBit) - signBit;
 }
 
+inline std::int32_t signedImmediate16(std::uint16_t value) {
+    return static_cast<std::int32_t>(signExtendBits(value, 16));
+}
+
+inline std::uint64_t relativeJumpTarget(std::uint64_t pc, std::uint16_t immediate) {
+    // смещение в командах перехода задается в 4-байтных словах инструкций
+    const std::int64_t byteOffset = static_cast<std::int64_t>(signedImmediate16(immediate)) *
+                                    static_cast<std::int64_t>(common::instructionSizeBytes);
+    return static_cast<std::uint64_t>(static_cast<std::int64_t>(pc) + byteOffset);
+}
+
 inline std::uint32_t signExtend(std::uint32_t value, std::uint8_t mode) {
     switch (mode) {
         case 0:
@@ -388,6 +399,12 @@ Emulator::TraceSnapshot Emulator::captureTraceSnapshot(const DecodedInstruction&
         case common::Opcode::MUL:
         case common::Opcode::UDIV:
         case common::Opcode::SDIV:
+        case common::Opcode::EQ:
+        case common::Opcode::NE:
+        case common::Opcode::LT:
+        case common::Opcode::GE:
+        case common::Opcode::SLT:
+        case common::Opcode::SGE:
             snapshot.b = readIfValid(instruction.b);
             snapshot.c = readIfValid(instruction.c);
             break;
@@ -412,10 +429,18 @@ Emulator::TraceSnapshot Emulator::captureTraceSnapshot(const DecodedInstruction&
             snapshot.b = readIfValid(instruction.b);
             break;
 
+        case common::Opcode::BRZ:
+        case common::Opcode::BRNZ:
+        case common::Opcode::AJMP:
+        case common::Opcode::CALL:
+            snapshot.a = readIfValid(instruction.a);
+            break;
+
         case common::Opcode::LI:
         case common::Opcode::LUI:
         case common::Opcode::ASPI:
         case common::Opcode::SCRR:
+        case common::Opcode::RJMP:
             break;
     }
 
@@ -462,7 +487,13 @@ void Emulator::execute(const DecodedInstruction& instruction) {
         case common::Opcode::SRA:
         case common::Opcode::MUL:
         case common::Opcode::UDIV:
-        case common::Opcode::SDIV: {
+        case common::Opcode::SDIV:
+        case common::Opcode::EQ:
+        case common::Opcode::NE:
+        case common::Opcode::LT:
+        case common::Opcode::GE:
+        case common::Opcode::SLT:
+        case common::Opcode::SGE: {
             validateRegisterIndex(instruction.a, "destination");
             validateRegisterIndex(instruction.b, "left source");
             validateRegisterIndex(instruction.c, "right source");
@@ -519,6 +550,24 @@ void Emulator::execute(const DecodedInstruction& instruction) {
                     );
                     break;
                 }
+                case common::Opcode::EQ:
+                    result = lhs == rhs ? 1u : 0u;
+                    break;
+                case common::Opcode::NE:
+                    result = lhs != rhs ? 1u : 0u;
+                    break;
+                case common::Opcode::LT:
+                    result = lhs < rhs ? 1u : 0u;
+                    break;
+                case common::Opcode::GE:
+                    result = lhs >= rhs ? 1u : 0u;
+                    break;
+                case common::Opcode::SLT:
+                    result = static_cast<std::int32_t>(lhs) < static_cast<std::int32_t>(rhs) ? 1u : 0u;
+                    break;
+                case common::Opcode::SGE:
+                    result = static_cast<std::int32_t>(lhs) >= static_cast<std::int32_t>(rhs) ? 1u : 0u;
+                    break;
                 default:
                     throw std::logic_error("unreachable opcode in RRR block");
             }
@@ -609,6 +658,43 @@ void Emulator::execute(const DecodedInstruction& instruction) {
             advancePc();
             return;
         }
+
+        case common::Opcode::RJMP:
+            pc_ = relativeJumpTarget(pc_, instruction.imm);
+            return;
+
+        case common::Opcode::BRZ:
+        case common::Opcode::BRNZ: {
+            validateRegisterIndex(instruction.a, "branch source");
+
+            const bool isZero = readRegister(instruction.a) == 0;
+            const bool shouldJump = instruction.opcode == common::Opcode::BRZ ? isZero : !isZero;
+
+            if (shouldJump) {
+                pc_ = relativeJumpTarget(pc_, instruction.imm);
+            }
+            else {
+                advancePc();
+            }
+            return;
+        }
+
+        case common::Opcode::AJMP:
+            validateRegisterIndex(instruction.a, "jump target");
+            pc_ = readRegister(instruction.a);
+            return;
+
+        case common::Opcode::CALL: {
+            validateRegisterIndex(instruction.a, "call target");
+            const std::uint32_t target = readRegister(instruction.a);
+            writeRegister(
+                common::returnAddressRegister,
+                static_cast<std::uint32_t>(pc_ + common::instructionSizeBytes)
+            );
+            pc_ = target;
+            return;
+        }
+
         case common::Opcode::SCRW: {
             validateRegisterIndex(instruction.b, "source");
 

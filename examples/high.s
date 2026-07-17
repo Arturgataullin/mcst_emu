@@ -1,0 +1,5 @@
+LFI R1 0xffffffff
+LI R2 0x1
+
+SUB R1 R1 R2
+BRNZ R1 0xffff

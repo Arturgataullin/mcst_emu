@@ -1,0 +1,13 @@
+# loop with AJMP: sum 1 + 2 + 3 + 4
+LI R0 0x0000
+LI R1 0x0000
+LI R2 0x0001
+LI R3 0x0004
+LI R4 0x0014
+
+# loop body at byte address 0x14
+ADD R1 R1 R2
+ADD R0 R0 R1
+LT R6 R1 R3
+BRZ R6 0x0002
+AJMP R4

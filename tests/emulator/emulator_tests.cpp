@@ -432,6 +432,99 @@ TEST_CASE("emulator writes and reads stack status registers independently") {
     REQUIRE(emulator.pc() == program.size());
 }
 
+TEST_CASE("emulator executes conditional branches") {
+    const std::vector<std::uint8_t> forwardBranch = {
+        0x00, 0x00, 0x00, 0x00, // LI R0 0
+        0x00, 0x01, 0x01, 0x00, // LI R1 1
+        0x31, 0x00, 0x02, 0x00, // BRZ R0 2
+        0x00, 0x01, 0x09, 0x00, // LI R1 9
+        0x00, 0x02, 0x07, 0x00  // LI R2 7
+    };
+
+    emulator::Emulator forward;
+    forward.loadProgram(forwardBranch);
+    forward.run();
+
+    REQUIRE(forward.registers()[1] == 1u);
+    REQUIRE(forward.registers()[2] == 7u);
+
+    const std::vector<std::uint8_t> backwardBranch = {
+        0x00, 0x01, 0x03, 0x00, // LI R1 3
+        0x00, 0x02, 0x01, 0x00, // LI R2 1
+        0x03, 0x01, 0x01, 0x02, // SUB R1 R1 R2
+        0x32, 0x01, 0xfe, 0xff, // BRNZ R1 -2
+        0x00, 0x03, 0x09, 0x00  // LI R3 9
+    };
+
+    emulator::Emulator backward;
+    backward.loadProgram(backwardBranch);
+    backward.run();
+
+    REQUIRE(backward.registers()[1] == 0u);
+    REQUIRE(backward.registers()[3] == 9u);
+}
+
+TEST_CASE("emulator executes relative jump absolute jump and call") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x10, 0x00, // LI R0 16
+        0x34, 0x00, 0x00, 0x00, // CALL R0
+        0x00, 0x04, 0x05, 0x00, // LI R4 5
+        0x30, 0x00, 0x03, 0x00, // RJMP 3
+        0x00, 0x03, 0x07, 0x00, // LI R3 7
+        0x33, 0x01, 0x00, 0x00  // AJMP R1
+    };
+
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.run();
+
+    REQUIRE(emulator.registers()[common::returnAddressRegister] == 8u);
+    REQUIRE(emulator.registers()[3] == 7u);
+    REQUIRE(emulator.registers()[4] == 5u);
+    REQUIRE(emulator.pc() == program.size());
+}
+
+TEST_CASE("emulator rejects jump before loaded program base") {
+    const std::vector<std::uint8_t> program = {
+        0x30, 0x00, 0xff, 0xff // RJMP -1
+    };
+
+    emulator::Emulator emulator;
+    emulator.loadProgram(program, 16);
+
+    REQUIRE_THROWS_WITH(
+        emulator.run(),
+        ContainsSubstring("instruction fetch goes past loaded program")
+    );
+}
+
+TEST_CASE("emulator executes comparison instructions") {
+    const std::vector<std::uint8_t> program = {
+        0x00, 0x00, 0x05, 0x00, // LI R0 5
+        0x00, 0x01, 0x07, 0x00, // LI R1 7
+        0x40, 0x02, 0x00, 0x01, // EQ R2 R0 R1
+        0x41, 0x03, 0x00, 0x01, // NE R3 R0 R1
+        0x42, 0x04, 0x00, 0x01, // LT R4 R0 R1
+        0x43, 0x05, 0x00, 0x01, // GE R5 R0 R1
+        0x00, 0x06, 0xff, 0xff, // LI R6 0xffff
+        0x01, 0x06, 0xff, 0xff, // LUI R6 0xffff
+        0x00, 0x07, 0x01, 0x00, // LI R7 1
+        0x44, 0x08, 0x06, 0x07, // SLT R8 R6 R7
+        0x45, 0x09, 0x06, 0x07  // SGE R9 R6 R7
+    };
+
+    emulator::Emulator emulator;
+    emulator.loadProgram(program);
+    emulator.run();
+
+    REQUIRE(emulator.registers()[2] == 0u);
+    REQUIRE(emulator.registers()[3] == 1u);
+    REQUIRE(emulator.registers()[4] == 1u);
+    REQUIRE(emulator.registers()[5] == 0u);
+    REQUIRE(emulator.registers()[8] == 1u);
+    REQUIRE(emulator.registers()[9] == 0u);
+}
+
 TEST_CASE("emulator resets stack status registers when loading another program") {
     const std::vector<std::uint8_t> firstProgram = {
         0x00, 0x00, 0x00, 0x01, // LI R0 0x0100
@@ -468,7 +561,7 @@ TEST_CASE("emulator validates SCRW and SCRR operands") {
 
     SECTION("SCRR status register") {
         const std::vector<std::uint8_t> program = {
-            0x21, 0x00, 0x03, 0x00 // SCRR R0 SCR3
+            0x21, 0x00, 0x00, 0x00 // SCRR R0 SCR0
         };
 
         emulator::Emulator emulator;

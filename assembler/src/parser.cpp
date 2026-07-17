@@ -1,6 +1,8 @@
 #include "parser.h"
 
 #include <sstream>
+#include <string>
+#include <utility>
 
 namespace assembler {
 
@@ -133,6 +135,14 @@ void appendLfi(const Instruction& instruction, std::vector<Instruction>& out) {
     out.push_back(makeLoadInstruction(common::Operation::LUI, destination, upper, instruction.location));
 }
 
+void appendRet(const Instruction& instruction, std::vector<Instruction>& out) {
+    Instruction lowered;
+    lowered.operation = common::Operation::AJMP;
+    lowered.location = instruction.location;
+    lowered.operands.push_back(RegisterOperand{common::returnAddressRegister});
+    out.push_back(std::move(lowered));
+}
+
 }
 
 void Parser::appendLoweredInstruction(Instruction instruction, std::vector<Instruction>& out) {
@@ -151,6 +161,10 @@ void Parser::appendLoweredInstruction(Instruction instruction, std::vector<Instr
 
         case common::Operation::LFI:
             appendLfi(instruction, out);
+            return;
+
+        case common::Operation::RET:
+            appendRet(instruction, out);
             return;
 
         default:
@@ -241,6 +255,12 @@ Instruction Parser::parseInstruction() {
         case common::Operation::MUL:
         case common::Operation::UDIV:
         case common::Operation::SDIV:
+        case common::Operation::EQ:
+        case common::Operation::NE:
+        case common::Operation::LT:
+        case common::Operation::GE:
+        case common::Operation::SLT:
+        case common::Operation::SGE:
             instruction.operands.push_back(parseRegisterOperand());
             instruction.operands.push_back(parseRegisterOperand());
             instruction.operands.push_back(parseRegisterOperand());
@@ -276,6 +296,19 @@ Instruction Parser::parseInstruction() {
             instruction.operands.push_back(parseRegisterOperand());
             instruction.operands.push_back(parseRegisterOperand());
             break;
+        // переходы используют 16-битное смещение в словах инструкций, а знаковость учитывает emulator
+        case common::Operation::RJMP:
+            instruction.operands.push_back(parseImmediateOperand(common::immediate16Max));
+            break;
+        case common::Operation::BRZ:
+        case common::Operation::BRNZ:
+            instruction.operands.push_back(parseRegisterOperand());
+            instruction.operands.push_back(parseImmediateOperand(common::immediate16Max));
+            break;
+        case common::Operation::AJMP:
+        case common::Operation::CALL:
+            instruction.operands.push_back(parseRegisterOperand());
+            break;
         case common::Operation::MOV:
         case common::Operation::NEG:
             instruction.operands.push_back(parseRegisterOperand());
@@ -287,6 +320,8 @@ Instruction Parser::parseInstruction() {
         case common::Operation::LFI:
             instruction.operands.push_back(parseRegisterOperand());
             instruction.operands.push_back(parseImmediateOperand(common::immediate32Max));
+            break;
+        case common::Operation::RET:
             break;
     }
 

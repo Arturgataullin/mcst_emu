@@ -76,6 +76,31 @@ TEST_CASE("assembled NEG works when source and destination are equal") {
     REQUIRE(registers[1] == 0xFFFFFFFBu);
 }
 
+TEST_CASE("assembled control flow and comparison instructions execute correctly") {
+    const auto registers = assembleAndRun(
+        "control_flow_compare",
+        "LI R0 0x0010\n"
+        "CALL R0\n"
+        "LI R4 0x0005\n"
+        "RJMP 0x0003\n"
+        "LI R3 0x0007\n"
+        "RET\n"
+        "LI R5 0x0005\n"
+        "LI R6 0x0007\n"
+        "LT R7 R5 R6\n"
+        "LI R8 0xffff\n"
+        "LUI R8 0xffff\n"
+        "LI R9 0x0001\n"
+        "SLT R10 R8 R9\n"
+    );
+
+    REQUIRE(registers[common::returnAddressRegister] == 8u);
+    REQUIRE(registers[3] == 7u);
+    REQUIRE(registers[4] == 5u);
+    REQUIRE(registers[7] == 1u);
+    REQUIRE(registers[10] == 1u);
+}
+
 TEST_CASE("assembled NOT works for highest user register") {
     const auto registers = assembleAndRun(
         "not_r15",

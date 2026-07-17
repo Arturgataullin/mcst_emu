@@ -36,6 +36,20 @@
   `R6=0x44332211`.
 - `ex9.s` - пример для предупреждений о чтении неинициализированной RAM.
   Запускать полезнее с `--warn=uninit-ram`.
+- `ex10.s` - переходы `RJMP`, `BRZ`, `BRNZ`, `AJMP`, `CALL`, псевдокоманда `RET`
+  и сравнения `EQ`, `NE`, `LT`, `GE`, `SLT`, `SGE`. Ключевой результат:
+  `R3=0x7`, `R4=0x5`, `R7=0x1`, `R8=0x0`, `R9=0x1`, `R12=0x1`, `R13=0x0`.
+- `call_ret.s` - простой вызов функции через `CALL` с возвратом через `RET`.
+  Функция удваивает значение в `R0`. Ключевой результат: `R0=0xe`, `R3=0xe`.
+- `recursive_factorial.s` - рекурсивный `fact(4)` с ручным сохранением адреса возврата.
+  Перед вложенным `CALL` программа сохраняет `R1` и текущий аргумент в стек, потому что
+  `CALL` перезаписывает `R1`. Ключевой результат: `R0=0x18`, `R9=0x18`.
+- `loop_brnz.s` - цикл-счётчик через `BRNZ` и отрицательное относительное смещение.
+  Ключевой результат: `R0=0xf`, `R1=0x0`.
+- `loop_brz_rjmp.s` - цикл вида `while`: выход через `BRZ`, возврат к проверке через `RJMP`.
+  Ключевой результат: `R0=0x18`, `R1=0x0`.
+- `loop_ajmp.s` - цикл с абсолютным переходом `AJMP` по адресу, заранее загруженному в регистр.
+  Ключевой результат: `R0=0xa`, `R1=0x4`, `R6=0x0`.
 - `stack.s` - инициализация `SP_TOP`/`SP_SIZE`, выделение через `ASPI`, запись
   значения и освобождение стека. Ключевой результат: `R6=0xbff0`, `R8=0xc000`,
   `R9=0xc000`, `R10=0x4000`.
@@ -80,6 +94,44 @@
 ```bash
 ./build/assembler/assembler examples/ex9.s examples/ex9.o
 ./build/emulator/emulator --warn=uninit-ram examples/ex9.o
+```
+
+Переходы, вызов подпрограммы и сравнения:
+
+```bash
+./build/assembler/assembler examples/ex10.s examples/ex10.o
+./build/emulator/emulator --trace=disasm examples/ex10.o
+```
+
+Обычный вызов функции через `CALL`/`RET`:
+
+```bash
+./build/assembler/assembler examples/call_ret.s examples/call_ret.o
+./build/emulator/emulator --trace=disasm examples/call_ret.o
+```
+
+Рекурсивный вызов с сохранением адреса возврата в стеке:
+
+```bash
+./build/assembler/assembler examples/recursive_factorial.s examples/recursive_factorial.o
+./build/emulator/emulator --trace=disasm --ram-size=1024 examples/recursive_factorial.o
+```
+
+В этом примере `R1` используется как регистр адреса возврата. Каждый вложенный `CALL`
+перезаписывает `R1`, поэтому перед рекурсивным вызовом текущий `R1` нужно сохранить
+в памяти, а после возврата восстановить перед `RET`.
+
+Три варианта циклов без меток:
+
+```bash
+./build/assembler/assembler examples/loop_brnz.s examples/loop_brnz.o
+./build/emulator/emulator --trace=disasm examples/loop_brnz.o
+
+./build/assembler/assembler examples/loop_brz_rjmp.s examples/loop_brz_rjmp.o
+./build/emulator/emulator --trace=disasm examples/loop_brz_rjmp.o
+
+./build/assembler/assembler examples/loop_ajmp.s examples/loop_ajmp.o
+./build/emulator/emulator --trace=disasm examples/loop_ajmp.o
 ```
 
 Пример стека требует RAM не меньше `0x10000` байт:

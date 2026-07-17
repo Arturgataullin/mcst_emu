@@ -214,6 +214,12 @@ void Emulator::writeDisasmTrace(
         case common::Opcode::MUL:
         case common::Opcode::UDIV:
         case common::Opcode::SDIV:
+        case common::Opcode::EQ:
+        case common::Opcode::NE:
+        case common::Opcode::LT:
+        case common::Opcode::GE:
+        case common::Opcode::SLT:
+        case common::Opcode::SGE:
             writeRegisterOperand(out, instruction.a, readRegister(instruction.a));
             writeRegisterOperand(out, instruction.b, before.b);
             writeRegisterOperand(out, instruction.c, before.c);
@@ -267,6 +273,21 @@ void Emulator::writeDisasmTrace(
         case common::Opcode::ASPR:
             writeRegisterOperand(out, instruction.a, readRegister(instruction.a));
             writeRegisterOperand(out, instruction.b, before.b);
+            break;
+
+        case common::Opcode::RJMP:
+            out << " imm (0x" << std::hex << instruction.imm << ')';
+            break;
+
+        case common::Opcode::BRZ:
+        case common::Opcode::BRNZ:
+            writeRegisterOperand(out, instruction.a, before.a);
+            out << " imm (0x" << std::hex << instruction.imm << ')';
+            break;
+
+        case common::Opcode::AJMP:
+        case common::Opcode::CALL:
+            writeRegisterOperand(out, instruction.a, before.a);
             break;
     }
 

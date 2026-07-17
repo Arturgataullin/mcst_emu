@@ -402,6 +402,79 @@ TEST_CASE("parser parses memory-format instruction with two registers and imm8")
     REQUIRE(asImmediate(inst.operands[2]).value == 0xFF);
 }
 
+TEST_CASE("parser parses control flow instructions") {
+    std::vector<Token> tokens = {
+        op("RJMP", 1, 1),
+        num("0xfffe", 0xfffe, 1, 6),
+        nl(1, 12),
+        op("BRZ", 2, 1),
+        reg("R1", 1, 2, 5),
+        num("0x2", 2, 2, 8),
+        nl(2, 11),
+        op("BRNZ", 3, 1),
+        reg("R2", 2, 3, 6),
+        num("0xffff", 0xffff, 3, 9),
+        nl(3, 15),
+        op("AJMP", 4, 1),
+        reg("R3", 3, 4, 6),
+        nl(4, 8),
+        op("CALL", 5, 1),
+        reg("R4", 4, 5, 6),
+        eof(5, 8)
+    };
+
+    Program program = Parser(std::move(tokens)).parseProgram();
+
+    REQUIRE(program.instructions.size() == 5);
+
+    REQUIRE(program.instructions[0].operation == Operation::RJMP);
+    REQUIRE(program.instructions[0].operands.size() == 1);
+    REQUIRE(asImmediate(program.instructions[0].operands[0]).value == 0xfffe);
+
+    REQUIRE(program.instructions[1].operation == Operation::BRZ);
+    REQUIRE(program.instructions[1].operands.size() == 2);
+    REQUIRE(asRegister(program.instructions[1].operands[0]).number == 1);
+    REQUIRE(asImmediate(program.instructions[1].operands[1]).value == 2);
+
+    REQUIRE(program.instructions[2].operation == Operation::BRNZ);
+    REQUIRE(program.instructions[2].operands.size() == 2);
+    REQUIRE(asRegister(program.instructions[2].operands[0]).number == 2);
+    REQUIRE(asImmediate(program.instructions[2].operands[1]).value == 0xffff);
+
+    REQUIRE(program.instructions[3].operation == Operation::AJMP);
+    REQUIRE(program.instructions[3].operands.size() == 1);
+    REQUIRE(asRegister(program.instructions[3].operands[0]).number == 3);
+
+    REQUIRE(program.instructions[4].operation == Operation::CALL);
+    REQUIRE(program.instructions[4].operands.size() == 1);
+    REQUIRE(asRegister(program.instructions[4].operands[0]).number == 4);
+}
+
+TEST_CASE("parser parses comparison instructions as register-register-register") {
+    std::vector<Token> tokens = {
+        op("EQ", 1, 1), reg("R1", 1, 1, 4), reg("R2", 2, 1, 7), reg("R3", 3, 1, 10), nl(1, 12),
+        op("NE", 2, 1), reg("R4", 4, 2, 4), reg("R5", 5, 2, 7), reg("R6", 6, 2, 10), nl(2, 12),
+        op("LT", 3, 1), reg("R7", 7, 3, 4), reg("R8", 8, 3, 7), reg("R9", 9, 3, 10), nl(3, 12),
+        op("GE", 4, 1), reg("R10", 10, 4, 4), reg("R11", 11, 4, 8), reg("R12", 12, 4, 12), nl(4, 15),
+        op("SLT", 5, 1), reg("R13", 13, 5, 5), reg("R14", 14, 5, 9), reg("R15", 15, 5, 13), nl(5, 16),
+        op("SGE", 6, 1), reg("R0", 0, 6, 5), reg("R1", 1, 6, 8), reg("R2", 2, 6, 11), eof(6, 13)
+    };
+
+    Program program = Parser(std::move(tokens)).parseProgram();
+
+    REQUIRE(program.instructions.size() == 6);
+    REQUIRE(program.instructions[0].operation == Operation::EQ);
+    REQUIRE(program.instructions[1].operation == Operation::NE);
+    REQUIRE(program.instructions[2].operation == Operation::LT);
+    REQUIRE(program.instructions[3].operation == Operation::GE);
+    REQUIRE(program.instructions[4].operation == Operation::SLT);
+    REQUIRE(program.instructions[5].operation == Operation::SGE);
+
+    for (const Instruction& instruction : program.instructions) {
+        REQUIRE(instruction.operands.size() == 3);
+    }
+}
+
 TEST_CASE("parser parses multiple instructions separated by newlines") {
     std::vector<Token> tokens = {
         nl(1, 1),
@@ -512,6 +585,20 @@ TEST_CASE("parser lowers LFI into lower and upper loads") {
     REQUIRE(program.instructions[1].operation == Operation::LUI);
     REQUIRE(asRegister(program.instructions[1].operands[0]).number == 4);
     REQUIRE(asImmediate(program.instructions[1].operands[1]).value == 0x1234);
+}
+
+TEST_CASE("parser lowers RET into jump through return address register") {
+    std::vector<Token> tokens = {
+        op("RET"),
+        eof(1, 4)
+    };
+
+    Program program = Parser(std::move(tokens)).parseProgram();
+
+    REQUIRE(program.instructions.size() == 1);
+    REQUIRE(program.instructions[0].operation == Operation::AJMP);
+    REQUIRE(program.instructions[0].operands.size() == 1);
+    REQUIRE(asRegister(program.instructions[0].operands[0]).number == common::returnAddressRegister);
 }
 
 TEST_CASE("parser lowers LFI into lower and upper loads and parses next instruction") {

@@ -67,7 +67,13 @@ std::uint32_t Encoder::encodeInstruction(const Instruction& instruction) const {
         case common::Operation::SRA:
         case common::Operation::MUL:
         case common::Operation::UDIV:
-        case common::Operation::SDIV: {
+        case common::Operation::SDIV:
+        case common::Operation::EQ:
+        case common::Operation::NE:
+        case common::Operation::LT:
+        case common::Operation::GE:
+        case common::Operation::SLT:
+        case common::Operation::SGE: {
             if (instruction.operands.size() != 3) {
                 fail(instruction.location, std::string(common::toString(instruction.operation)) + " expects 3 operands");
             }
@@ -85,6 +91,79 @@ std::uint32_t Encoder::encodeInstruction(const Instruction& instruction) const {
             word |= static_cast<std::uint32_t>(rd) << 8;
             word |= static_cast<std::uint32_t>(rs) << 16;
             word |= static_cast<std::uint32_t>(rt) << 24;
+            return word;
+        }
+
+        case common::Operation::RJMP: {
+            if (instruction.operands.size() != 1) {
+                fail(instruction.location, "RJMP expects 1 operand");
+            }
+
+            const std::uint16_t immediate = requireImmediate(
+                instruction.operands[0],
+                instruction.location,
+                "immediate"
+            );
+
+            // byte0 = opcode
+            // byte1 = 0
+            // byte2 = I0
+            // byte3 = I1
+            std::uint32_t word = 0;
+            word |= static_cast<std::uint32_t>(common::Opcode::RJMP);
+            word |= static_cast<std::uint32_t>(immediate & 0x00FFu) << 16;
+            word |= static_cast<std::uint32_t>((immediate >> 8) & 0x00FFu) << 24;
+            return word;
+        }
+
+        case common::Operation::BRZ:
+        case common::Operation::BRNZ: {
+            if (instruction.operands.size() != 2) {
+                fail(instruction.location, std::string(common::toString(instruction.operation)) + " expects 2 operands");
+            }
+
+            const std::uint8_t source = requireRegister(
+                instruction.operands[0],
+                instruction.location,
+                "source register"
+            );
+            const std::uint16_t immediate = requireImmediate(
+                instruction.operands[1],
+                instruction.location,
+                "immediate"
+            );
+
+            // byte0 = opcode
+            // byte1 = Ra
+            // byte2 = I0
+            // byte3 = I1
+            std::uint32_t word = 0;
+            word |= static_cast<std::uint32_t>(common::opcodeForOperation(instruction.operation));
+            word |= static_cast<std::uint32_t>(source) << 8;
+            word |= static_cast<std::uint32_t>(immediate & 0x00FFu) << 16;
+            word |= static_cast<std::uint32_t>((immediate >> 8) & 0x00FFu) << 24;
+            return word;
+        }
+
+        case common::Operation::AJMP:
+        case common::Operation::CALL: {
+            if (instruction.operands.size() != 1) {
+                fail(instruction.location, std::string(common::toString(instruction.operation)) + " expects 1 operand");
+            }
+
+            const std::uint8_t target = requireRegister(
+                instruction.operands[0],
+                instruction.location,
+                "target register"
+            );
+
+            // byte0 = opcode
+            // byte1 = Ra
+            // byte2 = 0
+            // byte3 = 0
+            std::uint32_t word = 0;
+            word |= static_cast<std::uint32_t>(common::opcodeForOperation(instruction.operation));
+            word |= static_cast<std::uint32_t>(target) << 8;
             return word;
         }
 
