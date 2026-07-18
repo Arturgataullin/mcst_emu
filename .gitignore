@@ -6,3 +6,8 @@ build-profile/
 exaples/*.o
 .vscode/
 Testing/
+callgrind*
+perf*
+result*
+profile_res*/
+prof_report

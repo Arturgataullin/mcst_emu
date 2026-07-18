@@ -50,6 +50,16 @@
   Ключевой результат: `R0=0x18`, `R1=0x0`.
 - `loop_ajmp.s` - цикл с абсолютным переходом `AJMP` по адресу, заранее загруженному в регистр.
   Ключевой результат: `R0=0xa`, `R1=0x4`, `R6=0x0`.
+- `prof_arith_loop.s` - длинный арифметический цикл для профилирования `execute()`,
+  `decode()` и dispatch инструкций без активной работы с RAM.
+- `prof_branch_loop.s` - длинный цикл вида `while` с проверкой условия через `BRZ`
+  и возвратом в начало через `RJMP`.
+- `prof_ajmp_loop.s` - длинный цикл с абсолютным переходом `AJMP`; полезен для
+  сравнения с относительными переходами.
+- `prof_memory_loop.s` - длинный цикл `STW`/`LDW`; нагружает `Memory::read32`,
+  `Memory::write32` и поиск блоков разреженной памяти.
+- `prof_call_loop.s` - длинный цикл вызовов функции через `CALL`/`RET`; показывает
+  стоимость вызова подпрограммы и использования регистра адреса возврата.
 - `stack.s` - инициализация `SP_TOP`/`SP_SIZE`, выделение через `ASPI`, запись
   значения и освобождение стека. Ключевой результат: `R6=0xbff0`, `R8=0xc000`,
   `R9=0xc000`, `R10=0x4000`.
@@ -172,5 +182,65 @@ read 4 byte(s) at 0x0000bffc uninit: 0x0000bffc,0x0000bffd,0x0000bffe,0x0000bfff
 ```bash
 ./build/emulator/emulator --ram-size=65536 --clear-stack --trace=ram-wr --warn=uninit-ram examples/stack_uninit.o
 ```
+
+## Примеры для профилирования
+
+Профилировать лучше сборку `RelWithDebInfo`: оптимизации включены, но имена функций
+остаются доступны для `perf` и `callgrind`.
+
+```bash
+cmake -S . -B build-profile -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build-profile
+```
+
+Benchmark-примеры специально делают длинные циклы. Запускайте их без трассировки,
+иначе профиль будет в основном показывать стоимость вывода в поток.
+
+```bash
+./build-profile/assembler/assembler examples/prof_arith_loop.s examples/prof_arith_loop.o
+./build-profile/assembler/assembler examples/prof_branch_loop.s examples/prof_branch_loop.o
+./build-profile/assembler/assembler examples/prof_ajmp_loop.s examples/prof_ajmp_loop.o
+./build-profile/assembler/assembler examples/prof_memory_loop.s examples/prof_memory_loop.o
+./build-profile/assembler/assembler examples/prof_call_loop.s examples/prof_call_loop.o
+```
+
+Быстрая проверка времени выполнения:
+
+```bash
+time ./build-profile/emulator/emulator examples/prof_arith_loop.o
+time ./build-profile/emulator/emulator examples/prof_memory_loop.o
+```
+
+Общая статистика через `perf`:
+
+```bash
+perf stat ./build-profile/emulator/emulator examples/prof_arith_loop.o
+perf stat ./build-profile/emulator/emulator examples/prof_memory_loop.o
+```
+
+Детальный профиль через `perf report`:
+
+```bash
+perf record -g ./build-profile/emulator/emulator examples/prof_arith_loop.o
+perf report
+```
+
+Профиль количества инструкций через `callgrind`:
+
+```bash
+valgrind --tool=callgrind ./build-profile/emulator/emulator examples/prof_memory_loop.o
+callgrind_annotate callgrind.out.*
+```
+
+Как выбирать пример:
+
+- `prof_arith_loop.s` - базовая стоимость `step()`, `decode()` и `execute()`.
+- `prof_branch_loop.s` - условные переходы и частые проверки условия цикла.
+- `prof_ajmp_loop.s` - абсолютный переход через регистр.
+- `prof_memory_loop.s` - чтение/запись RAM и накладные расходы разреженной памяти.
+- `prof_call_loop.s` - `CALL`, `RET` и сохранение адреса возврата в `R1`.
+
+Если `callgrind` работает слишком долго, уменьшите старшую часть счетчика в файле
+benchmark-а, например замените `LUI R1 0x03ff` на `LUI R1 0x003f`.
 
 Файлы `.o` являются генерируемыми и не хранятся в Git.

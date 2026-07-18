@@ -119,7 +119,7 @@ std::uint32_t Emulator::fetchInstructionWord() const {
     return memory_.read32(static_cast<std::uint32_t>(pc_));
 }
 
-inline DecodedInstruction Emulator::decode(std::uint32_t word) const {
+DecodedInstruction Emulator::decode(std::uint32_t word) const {
     DecodedInstruction inst;
     inst.opcode = static_cast<common::Opcode>(word & 0xFF);
     inst.a = static_cast<std::uint8_t>((word >> 8) & 0xFF);
@@ -129,20 +129,20 @@ inline DecodedInstruction Emulator::decode(std::uint32_t word) const {
     return inst;
 }
 
-inline void Emulator::validateRegisterIndex(std::uint8_t reg, const char* fieldName) const {
+void Emulator::validateRegisterIndex(std::uint8_t reg, const char* fieldName) const {
     if (reg >= common::registerCount && reg != common::assemblerTempRegister) [[unlikely]] {
         throwInvalidRegisterOndexIn(fieldName);
     }
 }
 
-inline std::uint32_t Emulator::readRegister(std::uint8_t reg) const {
+std::uint32_t Emulator::readRegister(std::uint8_t reg) const {
     if (reg == common::assemblerTempRegister) [[unlikely]] {
         return assemblerTempRegister_;
     }
     return registers_[reg];
 }
 
-inline void Emulator::writeRegister(std::uint8_t reg, std::uint32_t value) {
+void Emulator::writeRegister(std::uint8_t reg, std::uint32_t value) {
     if (reg == common::assemblerTempRegister) [[unlikely]] {
         assemblerTempRegister_ = value;
         return;
@@ -150,7 +150,7 @@ inline void Emulator::writeRegister(std::uint8_t reg, std::uint32_t value) {
     registers_[reg] = value;
 }
 
-inline std::uint32_t Emulator::readStatusRegister(common::StatusRegister reg) const {
+std::uint32_t Emulator::readStatusRegister(common::StatusRegister reg) const {
     const std::size_t index = common::statusRegisterIndex(reg);
 
     if (index == 0 || index >= statusRegisters_.size()) [[unlikely]] {
@@ -160,7 +160,7 @@ inline std::uint32_t Emulator::readStatusRegister(common::StatusRegister reg) co
     return statusRegisters_[index];
 }
 
-inline void Emulator::writeStatusRegister(common::StatusRegister reg, std::uint32_t value) {
+void Emulator::writeStatusRegister(common::StatusRegister reg, std::uint32_t value) {
     const std::size_t index = common::statusRegisterIndex(reg);
 
     if (index == 0 || index >= statusRegisters_.size()) [[unlikely]] {
