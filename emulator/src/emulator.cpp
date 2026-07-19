@@ -20,6 +20,10 @@ namespace {
     throw std::runtime_error("instruction fetch goes past loaded program");
 }
 
+[[noreturn]] void throwInstructionFetchMisaligned() {
+    throw std::runtime_error("instruction fetch address is not instruction-aligned");
+}
+
 [[noreturn]] void throwUDIVDivByZero() {
     throw std::runtime_error("UDIV: division by zero");
 }
@@ -65,6 +69,10 @@ void Emulator::loadProgramFromFile(const std::string& inputPath) {
 void Emulator::loadProgram(const std::vector<std::uint8_t>& program, std::uint32_t baseAddress) {
     if (program.size() % common::instructionSizeBytes != 0) {
         throw std::runtime_error("program size must be a multiple of 4 bytes");
+    }
+
+    if ((baseAddress & (common::instructionSizeBytes - 1)) != 0) [[unlikely]] {
+        throw std::runtime_error("program base address must be instruction-aligned");
     }
 
     constexpr std::uint64_t maxAddressableSize =
@@ -116,7 +124,11 @@ std::uint32_t Emulator::fetchInstructionWord() const {
         throwInstructionFetchGoesPastLoadedProgram();
     }
 
-    return memory_.read32(static_cast<std::uint32_t>(pc_));
+    if ((pc_ & (common::instructionSizeBytes - 1)) != 0) [[unlikely]] {
+        throwInstructionFetchMisaligned();
+    }
+
+    return memory_.readInstruction32(static_cast<std::uint32_t>(pc_));
 }
 
 DecodedInstruction Emulator::decode(std::uint32_t word) const {

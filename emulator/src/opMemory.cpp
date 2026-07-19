@@ -32,6 +32,12 @@ static_assert((Memory::blockSize & (Memory::blockSize - 1)) == 0, "blockSize mus
 static_assert(blockMask == Memory::blockSize - 1);
 static_assert((std::size_t{1} << blockShift) == Memory::blockSize);
 static_assert((std::size_t{1} << cellsPerBlockShift) == Memory::cellsPerBlock);
+static_assert((common::instructionSizeBytes & (common::instructionSizeBytes - 1)) == 0,
+              "instructionSizeBytes must be power of two");
+static_assert(common::instructionSizeBytes == Memory::cellSize,
+              "instructionSizeBytes must match memory cell size");
+static_assert((common::resetAddress & (common::instructionSizeBytes - 1)) == 0,
+              "resetAddress must be instruction-aligned");
 
 Memory::Memory(std::size_t size) {
     constexpr std::size_t maxAddressableSize =
@@ -167,6 +173,19 @@ std::uint32_t Memory::read32(std::uint32_t address) const {
     }
     // выровненное чтение 32 бит совпадает с одной внутренней ячейкой памяти
     return firstCell;
+}
+
+std::uint32_t Memory::readInstruction32(std::uint32_t address) const {
+    // fetch работает только с выровненными 4-байтными инструкциями, поэтому общий путь read32 здесь не нужен
+    const std::uint32_t blockIndex = blockIndexForAddress(address);
+    const std::size_t blockOffset = blockOffsetForAddress(address);
+    const Block* block = findBlock(blockIndex);
+
+    if (block == nullptr) [[unlikely]] {
+        return 0;
+    }
+
+    return block->cells[blockOffset >> cellShift];
 }
 
 // запись 0xAB по адресу 0x0
