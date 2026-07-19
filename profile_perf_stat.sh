@@ -37,12 +37,17 @@ run_one() {
   local input="$1"
   local obj
   local name
+  local emulator_args=()
 
   obj="$(assemble_if_needed "$input")"
   name="$(basename "$obj" .o)"
 
+  if [[ "$name" == "prof_page_alloc_loop" ]]; then
+    emulator_args=(--ram-size=268435456)
+  fi
+
   perf stat -r 10 -o "${out_dir}/${name}_perf_stat.txt" \
-    -- "$emulator" "$obj"
+    -- "$emulator" "${emulator_args[@]}" "$obj"
 }
 
 if [[ -z "$target" ]]; then

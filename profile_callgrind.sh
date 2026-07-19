@@ -38,14 +38,19 @@ run_one() {
   local obj
   local name
   local callgrind_out
+  local emulator_args=()
 
   obj="$(assemble_if_needed "$input")"
   name="$(basename "$obj" .o)"
   callgrind_out="${out_dir}/callgrind.${name}.out"
 
+  if [[ "$name" == "prof_page_alloc_loop" ]]; then
+    emulator_args=(--ram-size=268435456)
+  fi
+
   valgrind --tool=callgrind \
     --callgrind-out-file="$callgrind_out" \
-    "$emulator" "$obj"
+    "$emulator" "${emulator_args[@]}" "$obj"
 
   callgrind_annotate "$callgrind_out" \
     > "${out_dir}/${name}_callgrind"

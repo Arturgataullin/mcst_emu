@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <unordered_map>
+#include <memory>
 #include <vector>
 
 #include "isa.h"
@@ -97,7 +97,7 @@ private:
     [[nodiscard]] static std::uint32_t blockIndexForAddress(std::uint32_t address) noexcept;
     [[nodiscard]] static std::size_t blockOffsetForAddress(std::uint32_t address) noexcept;
 
-    // эти функции работают с уже найденным блоком, чтобы не делать поиск в unordered_map на каждый байт
+    // эти функции работают с уже найденным блоком, чтобы не искать блок памяти на каждый байт
     [[nodiscard]] static std::uint8_t readByteFromBlock(const Block& block, std::size_t blockOffset) noexcept;
     static void writeByteToBlock(Block& block, std::size_t blockOffset, std::uint8_t value) noexcept;
     [[nodiscard]] static std::uint32_t byteRangeMask(std::size_t byteOffset, std::size_t byteCount) noexcept;
@@ -107,8 +107,10 @@ private:
     static void resetInitializedInBlock(Block& block, std::size_t blockOffset, std::size_t byteCount);
 
 private:
-    // память хранится блоками по 4кб, чтобы большой объем RAM не выделялся сразу
-    std::unordered_map<std::uint32_t, Block> blocks_;
+    // таблица хранит указатели на блоки, сами 4 КБ блоки выделяются только при первом обращении
+    std::vector<std::unique_ptr<Block>> blocks_;
+    // список нужен, чтобы clear() обходил только реально выделенные блоки
+    std::vector<std::uint32_t> allocatedBlockIndices_;
     std::size_t size_;
     CellWriteHandler cellWriteHandler_;
     UninitReadHandler cellReadHandler_;

@@ -56,11 +56,15 @@ Memory::Memory(std::size_t size) {
     }
 
     size_ = size;
+    blocks_.resize((size_ + blockSize - 1) / blockSize);
 }
 
 void Memory::clear() noexcept {
     // при очистке достаточно удалить выделенные блоки, не проходя по всему размеру RAM
-    blocks_.clear();
+    for (std::uint32_t blockIndex : allocatedBlockIndices_) {
+        blocks_[blockIndex].reset();
+    }
+    allocatedBlockIndices_.clear();
     resetBlockCache();
 }
 
@@ -70,7 +74,7 @@ void Memory::load(const std::vector<std::uint8_t>& bytes, std::uint32_t baseAddr
 
     std::size_t loaded = 0;
     while (loaded < bytes.size()) {
-        // загрузка идет кусками внутри одного блока, чтобы не искать unordered_map для каждого байта
+        // загрузка идет кусками внутри одного блока, чтобы не искать блок памяти для каждого байта
         const std::uint32_t currentAddress = baseAddress + static_cast<std::uint32_t>(loaded);
         const std::size_t blockOffset = blockOffsetForAddress(currentAddress);
         const std::size_t bytesLeft = bytes.size() - loaded;
@@ -316,11 +320,11 @@ void Memory::markUninitialized(std::uint32_t address, std::size_t byteCount) {
             byteCount - marked,
             blockSize - blockOffset
         );
-        const auto blockIt = blocks_.find(blockIndexForAddress(currentAddress));
+        Block* block = blocks_[blockIndexForAddress(currentAddress)].get();
 
         // байты отсутствующего разреженного блока уже считаются неинициализированными
-        if (blockIt != blocks_.end()) {
-            resetInitializedInBlock(blockIt->second, blockOffset, bytesInBlock);
+        if (block != nullptr) {
+            resetInitializedInBlock(*block, blockOffset, bytesInBlock);
         }
 
         marked += bytesInBlock;
@@ -352,17 +356,16 @@ void Memory::clearRangeImpl(std::uint32_t address, std::size_t byteCount, bool r
             byteCount - cleared,
             blockSize - blockOffset
         );
-        const auto blockIt = blocks_.find(blockIndex);
+        Block* block = blocks_[blockIndex].get();
 
         // отсутствующий разреженный блок уже содержит нули и считается неинициализированным
-        if (blockIt == blocks_.end()) {
+        if (block == nullptr) {
             cleared += bytesInBlock;
             continue;
         }
 
-        Block& block = blockIt->second;
         if (!traceWrites) [[likely]] {
-            clearBytesInBlock(block, blockOffset, bytesInBlock);
+            clearBytesInBlock(*block, blockOffset, bytesInBlock);
         }
         else {
             // RAM trace требует отдельного old -> new события для каждой затронутой ячейки
@@ -375,9 +378,9 @@ void Memory::clearRangeImpl(std::uint32_t address, std::size_t byteCount, bool r
                     cellSize - cellOffset
                 );
                 const std::size_t cellIndexInBlock = currentOffset >> cellShift;
-                const std::uint32_t oldData = block.cells[cellIndexInBlock];
+                const std::uint32_t oldData = block->cells[cellIndexInBlock];
 
-                clearBytesInCell(block.cells[cellIndexInBlock], cellOffset, bytesInCell);
+                clearBytesInCell(block->cells[cellIndexInBlock], cellOffset, bytesInCell);
 
                 cellWriteHandler_(
                     static_cast<std::uint32_t>(
@@ -385,7 +388,7 @@ void Memory::clearRangeImpl(std::uint32_t address, std::size_t byteCount, bool r
                         cellIndexInBlock * cellSize
                     ),
                     oldData,
-                    block.cells[cellIndexInBlock]
+                    block->cells[cellIndexInBlock]
                 );
                 clearedInBlock += bytesInCell;
             }
@@ -393,7 +396,7 @@ void Memory::clearRangeImpl(std::uint32_t address, std::size_t byteCount, bool r
 
         if (resetInitialized) {
             // при совместной очистке значения и признаки инициализации сбрасываются за один проход по блокам
-            resetInitializedInBlock(block, blockOffset, bytesInBlock);
+            resetInitializedInBlock(*block, blockOffset, bytesInBlock);
         }
 
         cleared += bytesInBlock;
@@ -476,7 +479,13 @@ Memory::Block& Memory::getOrCreateBlock(std::uint32_t blockIndex) {
     }
 
     // блок создается только при записи или загрузке данных, а не при создании всей RAM
-    Block& block = blocks_[blockIndex];
+    std::unique_ptr<Block>& blockPtr = blocks_[blockIndex];
+    if (blockPtr == nullptr) [[unlikely]] {
+        blockPtr = std::make_unique<Block>();
+        allocatedBlockIndices_.push_back(blockIndex);
+    }
+
+    Block& block = *blockPtr;
     cachedWriteBlockIndex_ = blockIndex;
     cachedWriteBlock_ = &block;
 
@@ -491,13 +500,17 @@ const Memory::Block* Memory::findBlock(std::uint32_t blockIndex) const {
         return cachedReadBlock_;
     }
 
-    const auto it = blocks_.find(blockIndex);
-    if (it == blocks_.end()) {
+    if (blockIndex >= blocks_.size()) [[unlikely]] {
+        return nullptr;
+    }
+
+    const std::unique_ptr<Block>& block = blocks_[blockIndex];
+    if (block == nullptr) {
         return nullptr;
     }
 
     cachedReadBlockIndex_ = blockIndex;
-    cachedReadBlock_ = &it->second;
+    cachedReadBlock_ = block.get();
     return cachedReadBlock_;
 }
 
@@ -555,7 +568,7 @@ inline void Memory::clearBytesInCell(
 }
 
 void Memory::clearBytesInBlock(Block& block, std::size_t blockOffset, std::size_t byteCount) noexcept {
-    // диапазон уже лежит внутри одного блока, поэтому можно работать без поиска в unordered_map
+    // диапазон уже лежит внутри одного блока, поэтому можно работать без поиска блока памяти
     if (blockOffset == 0 && byteCount == blockSize) {
         block.cells.fill(0);
         return;
