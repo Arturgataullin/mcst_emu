@@ -122,6 +122,44 @@ ctest --test-dir build --output-on-failure
 - тесты памяти и выполнения инструкций эмулятором;
 - сквозные тесты `исходный код -> ассемблер -> бинарный файл -> эмулятор`.
 
+## Профилирование
+
+Для профилирования используйте отдельную сборку `RelWithDebInfo`: в ней включены
+оптимизации, но сохраняются имена функций для `perf` и `callgrind`.
+
+```bash
+cmake -S . -B build-profile -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build-profile
+```
+
+В `examples` есть длинные benchmark-примеры `prof_*.s`: арифметика, переходы,
+`AJMP`, работа с RAM и `CALL`/`RET`. Их нужно запускать без трассировки, чтобы
+измерять эмулятор, а не вывод в поток.
+
+Собрать все `.s` файлы из директории в `.o` можно так:
+
+```bash
+./assemble_dir.sh examples
+```
+
+Для сбора `perf stat`:
+
+```bash
+./profile_perf_stat.sh profile_res_before
+./profile_perf_stat.sh profile_res_before prof_memory_loop
+```
+
+Для `callgrind` с последующим `callgrind_annotate`:
+
+```bash
+./profile_callgrind.sh profile_res_before
+./profile_callgrind.sh profile_res_before prof_memory_loop
+```
+
+Первый аргумент - директория для результатов. Второй аргумент необязательный:
+если он не задан, обрабатываются все `examples/prof_*.s`; если задано имя
+например `prof_memory_loop`, профилируется только этот пример.
+
 ## Трассировка исполнения
 
 Трасса команд включается опцией `--trace=disasm`:
