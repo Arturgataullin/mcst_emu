@@ -70,6 +70,4 @@ perf report
 
 Для `prof_page_alloc_loop` нужен увеличенный размер RAM. Скрипты `profile_perf_stat.sh` и `profile_callgrind.sh` передают `--ram-size=268435456` автоматически.
 
-Если `callgrind` работает слишком долго, уменьшите старшую часть счетчика в файле benchmark-а, например замените `LUI R1 0x03ff` на `LUI R1 0x003f`.
-
 Файлы `.o` являются генерируемыми и не хранятся в Git.
