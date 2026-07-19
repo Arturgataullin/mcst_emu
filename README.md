@@ -132,14 +132,14 @@ cmake -S . -B build-profile -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build-profile
 ```
 
-В `examples` есть длинные benchmark-примеры `prof_*.s`: арифметика, переходы,
+В `prof_examples` есть длинные benchmark-примеры `prof_*.s`: арифметика, переходы,
 `AJMP`, работа с RAM и `CALL`/`RET`. Их нужно запускать без трассировки, чтобы
 измерять эмулятор, а не вывод в поток.
 
 Собрать все `.s` файлы из директории в `.o` можно так:
 
 ```bash
-./assemble_dir.sh examples
+./assemble_dir.sh prof_examples
 ```
 
 Для сбора `perf stat`:
@@ -157,7 +157,7 @@ cmake --build build-profile
 ```
 
 Первый аргумент - директория для результатов. Второй аргумент необязательный:
-если он не задан, обрабатываются все `examples/prof_*.s`; если задано имя
+если он не задан, обрабатываются все `prof_examples/*.s`; если задано имя
 например `prof_memory_loop`, профилируется только этот пример.
 
 ## Трассировка исполнения

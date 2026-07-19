@@ -92,6 +92,7 @@ private:
     void writeCellUnchecked(std::size_t cellIndex, std::uint32_t value);
     [[nodiscard]] Block& getOrCreateBlock(std::uint32_t blockIndex);
     [[nodiscard]] const Block* findBlock(std::uint32_t blockIndex) const;
+    void resetBlockCache() noexcept;
     [[nodiscard]] static std::uint32_t blockIndexForAddress(std::uint32_t address) noexcept;
     [[nodiscard]] static std::size_t blockOffsetForAddress(std::uint32_t address) noexcept;
 
@@ -110,6 +111,11 @@ private:
     std::size_t size_;
     CellWriteHandler cellWriteHandler_;
     UninitReadHandler cellReadHandler_;
+    // кэши ускоряют повторные обращения в один и тот же 4 КБ блок
+    mutable std::uint32_t cachedReadBlockIndex_ = 0;
+    mutable const Block* cachedReadBlock_ = nullptr;
+    std::uint32_t cachedWriteBlockIndex_ = 0;
+    Block* cachedWriteBlock_ = nullptr;
 };
 
 }

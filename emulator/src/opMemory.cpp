@@ -55,6 +55,7 @@ Memory::Memory(std::size_t size) {
 void Memory::clear() noexcept {
     // при очистке достаточно удалить выделенные блоки, не проходя по всему размеру RAM
     blocks_.clear();
+    resetBlockCache();
 }
 
 // загружает bytes в память, начиная с baseAddress включительно
@@ -449,16 +450,43 @@ inline void Memory::writeCellUnchecked(std::size_t cellIndex, std::uint32_t valu
 }
 
 Memory::Block& Memory::getOrCreateBlock(std::uint32_t blockIndex) {
+    if (cachedWriteBlock_ != nullptr && cachedWriteBlockIndex_ == blockIndex) [[likely]] {
+        cachedReadBlockIndex_ = blockIndex;
+        cachedReadBlock_ = cachedWriteBlock_;
+        return *cachedWriteBlock_;
+    }
+
     // блок создается только при записи или загрузке данных, а не при создании всей RAM
-    return blocks_[blockIndex];
+    Block& block = blocks_[blockIndex];
+    cachedWriteBlockIndex_ = blockIndex;
+    cachedWriteBlock_ = &block;
+
+    // блок, найденный при записи, сразу можно использовать и для последующего чтения
+    cachedReadBlockIndex_ = blockIndex;
+    cachedReadBlock_ = &block;
+    return block;
 }
 
 const Memory::Block* Memory::findBlock(std::uint32_t blockIndex) const {
+    if (cachedReadBlock_ != nullptr && cachedReadBlockIndex_ == blockIndex) [[likely]] {
+        return cachedReadBlock_;
+    }
+
     const auto it = blocks_.find(blockIndex);
     if (it == blocks_.end()) {
         return nullptr;
     }
-    return &it->second;
+
+    cachedReadBlockIndex_ = blockIndex;
+    cachedReadBlock_ = &it->second;
+    return cachedReadBlock_;
+}
+
+void Memory::resetBlockCache() noexcept {
+    cachedReadBlockIndex_ = 0;
+    cachedReadBlock_ = nullptr;
+    cachedWriteBlockIndex_ = 0;
+    cachedWriteBlock_ = nullptr;
 }
 
 inline std::uint32_t Memory::blockIndexForAddress(std::uint32_t address) noexcept {
