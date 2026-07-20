@@ -71,6 +71,10 @@ private:
     void writeStatusRegister(common::StatusRegister reg, std::uint32_t value);
     void advanceStackPointer(std::uint8_t destination, std::int64_t delta);
 
+    // вызывается только после проверки !isFinished(); run() выбирает trace-ветку один раз до цикла
+    template <bool TraceEnabled>
+    void stepImpl();
+
 #if MCST_TRACING
     // снимок хранит только значения операндов текущей инструкции, а не весь файл регистров
     struct TraceSnapshot {

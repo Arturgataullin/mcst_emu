@@ -760,13 +760,20 @@ void Emulator::execute(const DecodedInstruction& instruction) {
     }
 }
 
-void Emulator::step() {
-    if (isFinished()) {
-        return;
-    }
+template <>
+void Emulator::stepImpl<false>() {
+    // быстрый путь без трассировки: в горячем цикле остаются только fetch/decode/execute
+    const std::uint32_t word = fetchInstructionWord();
+    const DecodedInstruction instruction = decode(word);
+    execute(instruction);
+    ++tick_;
+}
 
+template <>
+void Emulator::stepImpl<true>() {
+#if MCST_TRACING
     const std::uint32_t instructionAddress = static_cast<std::uint32_t>(pc_);
-    (void) instructionAddress;
+#endif
     const std::uint32_t word = fetchInstructionWord();
     const DecodedInstruction instruction = decode(word);
 
@@ -774,15 +781,15 @@ void Emulator::step() {
     // номер такта равен числу команд, исполненных перед текущей командой
     const std::uint64_t currentTick = tick_;
     const bool emitRamWriteTrace = ramWriteTraceOutput_ != nullptr;
+    const bool emitDisasmTrace =
+        traceOutput_ != nullptr &&
+        tickRangeFilter_.contains(currentTick);
+    TraceSnapshot before{};
+
     if (emitRamWriteTrace) [[unlikely]] {
         // на каждом шаге буфер должен содержать только записи текущей инструкции
         pendingRamWriteTrace_.clear();
     }
-    const bool emitDisasmTrace =
-        traceOutput_ != nullptr &&
-        tickRangeFilter_.contains(currentTick);
-
-    TraceSnapshot before{};
     if (emitDisasmTrace) [[unlikely]] {
         // источники должны выводиться со значениями до исполнения команды
         before = captureTraceSnapshot(instruction);
@@ -790,8 +797,6 @@ void Emulator::step() {
 #endif
 
     execute(instruction);
-
-    // счётчик увеличивается только после успешного выполнения инструкции
     ++tick_;
 
 #if MCST_TRACING
@@ -804,6 +809,7 @@ void Emulator::step() {
             before
         );
     }
+
     if (emitRamWriteTrace) [[unlikely]] {
         // RAM trace печатается после execute(), когда известны все изменения ячеек
         flushRamWriteTrace();
@@ -811,9 +817,37 @@ void Emulator::step() {
 #endif
 }
 
+void Emulator::step() {
+    if (isFinished()) {
+        return;
+    }
+
+#if MCST_TRACING
+    if (traceOutput_ != nullptr || ramWriteTraceOutput_ != nullptr) [[unlikely]] {
+        // при одиночном step() режим трассировки приходится выбирать на каждом вызове
+        stepImpl<true>();
+    }
+    else {
+        stepImpl<false>();
+    }
+#else
+    stepImpl<false>();
+#endif
+}
+
 void Emulator::run() {
+#if MCST_TRACING
+    if (traceOutput_ != nullptr || ramWriteTraceOutput_ != nullptr) [[unlikely]] {
+        // run() выбирает специализацию один раз, чтобы не проверять trace-флаги на каждом такте
+        while (!isFinished()) {
+            stepImpl<true>();
+        }
+        return;
+    }
+#endif
+
     while (!isFinished()) {
-        step();
+        stepImpl<false>();
     }
 }
 
