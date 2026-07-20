@@ -432,6 +432,38 @@ TEST_CASE("emulator writes and reads stack status registers independently") {
     REQUIRE(emulator.pc() == program.size());
 }
 
+TEST_CASE("emulator reads and writes instruction pointer status register") {
+    SECTION("SCRR IP reads current instruction address") {
+        const std::vector<std::uint8_t> program = {
+            0x21, 0x01, 0x00, 0x00, // SCRR R1 IP
+            0x21, 0x02, 0x00, 0x00  // SCRR R2 IP
+        };
+
+        emulator::Emulator emulator;
+        emulator.loadProgram(program);
+        emulator.run();
+
+        REQUIRE(emulator.registers()[1] == 0u);
+        REQUIRE(emulator.registers()[2] == 4u);
+    }
+
+    SECTION("SCRW IP changes control flow") {
+        const std::vector<std::uint8_t> program = {
+            0x00, 0x00, 0x0c, 0x00, // LI R0 12
+            0x20, 0x00, 0x00, 0x00, // SCRW IP R0
+            0x00, 0x01, 0x09, 0x00, // LI R1 9
+            0x00, 0x02, 0x07, 0x00  // LI R2 7
+        };
+
+        emulator::Emulator emulator;
+        emulator.loadProgram(program);
+        emulator.run();
+
+        REQUIRE(emulator.registers()[1] == 0u);
+        REQUIRE(emulator.registers()[2] == 7u);
+    }
+}
+
 TEST_CASE("emulator executes conditional branches") {
     const std::vector<std::uint8_t> forwardBranch = {
         0x00, 0x00, 0x00, 0x00, // LI R0 0
@@ -551,7 +583,7 @@ TEST_CASE("emulator resets stack status registers when loading another program")
 TEST_CASE("emulator validates SCRW and SCRR operands") {
     SECTION("SCRW status register") {
         const std::vector<std::uint8_t> program = {
-            0x20, 0x00, 0x00, 0x00 // SCRW SCR0 R0
+            0x20, 0x03, 0x00, 0x00 // SCRW SCR3 R0
         };
 
         emulator::Emulator emulator;
@@ -561,7 +593,7 @@ TEST_CASE("emulator validates SCRW and SCRR operands") {
 
     SECTION("SCRR status register") {
         const std::vector<std::uint8_t> program = {
-            0x21, 0x00, 0x00, 0x00 // SCRR R0 SCR0
+            0x21, 0x00, 0x03, 0x00 // SCRR R0 SCR3
         };
 
         emulator::Emulator emulator;

@@ -130,6 +130,9 @@ namespace common {
     }
 
     std::optional<StatusRegister> statusRegisterFromString(std::string_view lexeme) {
+        if (lexeme == "IP") {
+            return StatusRegister::Ip;
+        }
         if (lexeme == "SP_TOP") {
             return StatusRegister::SpTop;
         }
@@ -232,6 +235,7 @@ namespace common {
 
     std::string_view toString(StatusRegister reg) {
         switch (reg) {
+            case StatusRegister::Ip: return "IP";
             case StatusRegister::SpTop: return "SP_TOP";
             case StatusRegister::SpSize: return "SP_SIZE";
             case StatusRegister::Count: break;

@@ -485,7 +485,7 @@ TEST_CASE("encoder encodes stack instructions") {
     Program program;
     program.instructions.push_back(makeStackInstruction(
         common::Operation::SCRW,
-        StatusRegisterOperand{common::StatusRegister::SpTop},
+        StatusRegisterOperand{common::StatusRegister::Ip},
         RegisterOperand{5}
     ));
     program.instructions.push_back(makeStackInstruction(
@@ -506,7 +506,7 @@ TEST_CASE("encoder encodes stack instructions") {
 
     const std::vector<std::uint8_t> bytes = Encoder{}.encode(program);
     const std::vector<std::uint8_t> expected = {
-        0x20, 0x01, 0x05, 0x00,
+        0x20, 0x00, 0x05, 0x00,
         0x21, 0x05, 0x01, 0x00,
         0x22, 0x05, 0xf0, 0xff,
         0x23, 0x05, 0x06, 0x00
@@ -728,7 +728,7 @@ TEST_CASE("encoder rejects invalid status register index") {
     Program program;
     program.instructions.push_back(makeStackInstruction(
         common::Operation::SCRW,
-        StatusRegisterOperand{static_cast<common::StatusRegister>(0)},
+        StatusRegisterOperand{common::StatusRegister::Count},
         RegisterOperand{5}
     ));
 

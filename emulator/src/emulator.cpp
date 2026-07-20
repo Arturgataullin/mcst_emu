@@ -165,8 +165,12 @@ void Emulator::writeRegister(std::uint8_t reg, std::uint32_t value) {
 std::uint32_t Emulator::readStatusRegister(common::StatusRegister reg) const {
     const std::size_t index = common::statusRegisterIndex(reg);
 
-    if (index == 0 || index >= statusRegisters_.size()) [[unlikely]] {
+    if (index >= statusRegisters_.size()) [[unlikely]] {
         throwInvalidStatusRegisterIndex();
+    }
+
+    if (reg == common::StatusRegister::Ip) {
+        return static_cast<std::uint32_t>(pc_);
     }
 
     return statusRegisters_[index];
@@ -175,8 +179,13 @@ std::uint32_t Emulator::readStatusRegister(common::StatusRegister reg) const {
 void Emulator::writeStatusRegister(common::StatusRegister reg, std::uint32_t value) {
     const std::size_t index = common::statusRegisterIndex(reg);
 
-    if (index == 0 || index >= statusRegisters_.size()) [[unlikely]] {
+    if (index >= statusRegisters_.size()) [[unlikely]] {
         throwInvalidStatusRegisterIndex();
+    }
+
+    if (reg == common::StatusRegister::Ip) {
+        pc_ = value;
+        return;
     }
 
     statusRegisters_[index] = value;
@@ -715,6 +724,9 @@ void Emulator::execute(const DecodedInstruction& instruction) {
             writeStatusRegister(statusRegister, value);
             if (statusRegister == common::StatusRegister::SpTop) {
                 stackBottom_ = value;
+            }
+            if (statusRegister == common::StatusRegister::Ip) {
+                return;
             }
             advancePc();
             return;

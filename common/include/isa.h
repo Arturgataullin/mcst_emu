@@ -123,6 +123,7 @@ namespace common {
 
     // индекс является частью машинной кодировки операнда SCR
     enum class StatusRegister : std::uint8_t {
+        Ip = 0,
         SpTop = 1,
         SpSize = 2,
         // служебное значение задаёт размер массива SCR и не является регистром

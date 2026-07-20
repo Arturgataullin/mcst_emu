@@ -325,6 +325,7 @@ std::uint8_t Encoder::requireStatusRegister(
     // Operand можно создать напрямую, поэтому допустимость enum проверяется и после parser
     const common::StatusRegister reg = std::get<StatusRegisterOperand>(operand).reg;
     switch (reg) {
+        case common::StatusRegister::Ip:
         case common::StatusRegister::SpTop:
         case common::StatusRegister::SpSize:
             return common::statusRegisterIndex(reg);

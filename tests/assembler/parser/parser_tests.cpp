@@ -630,8 +630,8 @@ TEST_CASE("parser lowers LFI into lower and upper loads and parses next instruct
 TEST_CASE("parser parses stack instructions") {
     std::vector<Token> tokens = {
         op("SCRW", 1, 1),
-        scr("SP_TOP", common::StatusRegister::SpTop, 1, 6),
-        reg("R5", 5, 1, 13),
+        scr("IP", common::StatusRegister::Ip, 1, 6),
+        reg("R5", 5, 1, 9),
         nl(1, 15),
         op("SCRR", 2, 1),
         reg("R6", 6, 2, 6),
@@ -654,7 +654,7 @@ TEST_CASE("parser parses stack instructions") {
     const Instruction& scrw = program.instructions[0];
     REQUIRE(scrw.operation == Operation::SCRW);
     REQUIRE(scrw.operands.size() == 2);
-    CHECK(asStatusRegister(scrw.operands[0]).reg == common::StatusRegister::SpTop);
+    CHECK(asStatusRegister(scrw.operands[0]).reg == common::StatusRegister::Ip);
     CHECK(asRegister(scrw.operands[1]).number == 5);
 
     const Instruction& scrr = program.instructions[1];

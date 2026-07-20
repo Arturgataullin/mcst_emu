@@ -379,13 +379,16 @@ StatusRegisterOperand Parser::parseStatusRegisterOperand() {
 
     // lexer сохраняет индекс в numberValue, но parser повторно проверяет допустимый набор SCR
     const auto index = *token.numberValue;
+    if (index == common::statusRegisterIndex(common::StatusRegister::Ip)) {
+        return StatusRegisterOperand{common::StatusRegister::Ip};
+    }
     if (index == common::statusRegisterIndex(common::StatusRegister::SpTop)) {
         return StatusRegisterOperand{common::StatusRegister::SpTop};
     }
     if (index == common::statusRegisterIndex(common::StatusRegister::SpSize)) {
         return StatusRegisterOperand{common::StatusRegister::SpSize};
     }
-    fail(token.location, "status register index must be 1 or 2");
+    fail(token.location, "status register index must be 0, 1 or 2");
 }
 
 void Parser::expect(TokenType type, const std::string& message) {
