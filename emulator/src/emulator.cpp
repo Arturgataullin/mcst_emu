@@ -8,6 +8,12 @@
 #include <sstream>
 #include <stdexcept>
 
+#if defined(__GNUC__) || defined(__clang__)
+#define EMULATOR_ALWAYS_INLINE __attribute__((always_inline)) inline
+#else
+#define EMULATOR_ALWAYS_INLINE inline
+#endif
+
 namespace emulator {
 
 namespace {
@@ -780,7 +786,7 @@ void Emulator::execute(const DecodedInstruction& instruction) {
 }
 
 template <>
-void Emulator::stepImpl<false>() {
+EMULATOR_ALWAYS_INLINE void Emulator::stepImpl<false>() {
     // быстрый путь без трассировки: в горячем цикле остаются только fetch/decode/execute
     const std::uint32_t word = fetchInstructionWord();
     const DecodedInstruction instruction = decode(word);
@@ -789,7 +795,7 @@ void Emulator::stepImpl<false>() {
 }
 
 template <>
-void Emulator::stepImpl<true>() {
+EMULATOR_ALWAYS_INLINE void Emulator::stepImpl<true>() {
 #if MCST_TRACING
     const std::uint32_t instructionAddress = static_cast<std::uint32_t>(pc_);
 #endif
