@@ -162,41 +162,60 @@ void Emulator::writeRegister(std::uint8_t reg, std::uint32_t value) {
     registers_[reg] = value;
 }
 
-std::uint32_t Emulator::readStatusRegister(common::StatusRegister reg) const {
-    const std::size_t index = common::statusRegisterIndex(reg);
-
-    if (index >= statusRegisters_.size()) [[unlikely]] {
+std::uint32_t Emulator::readStatusRegister(std::uint8_t index) const {
+    if (index >= common::statusRegisterCount) [[unlikely]] {
         throwInvalidStatusRegisterIndex();
     }
 
-    if (reg == common::StatusRegister::Ip) {
-        return static_cast<std::uint32_t>(pc_);
+    const auto reg = static_cast<common::StatusRegister>(index);
+
+    switch (reg) {
+        case common::StatusRegister::Ip:
+            return static_cast<std::uint32_t>(pc_);
+
+        case common::StatusRegister::SpTop:
+        case common::StatusRegister::SpSize:
+            return statusRegisters_[index];
+
+        case common::StatusRegister::Count:
+            break;
     }
 
-    return statusRegisters_[index];
+    throwInvalidStatusRegisterIndex();
 }
 
-void Emulator::writeStatusRegister(common::StatusRegister reg, std::uint32_t value) {
-    const std::size_t index = common::statusRegisterIndex(reg);
-
-    if (index >= statusRegisters_.size()) [[unlikely]] {
+void Emulator::writeStatusRegister(std::uint8_t index, std::uint32_t value) {
+    if (index >= common::statusRegisterCount) [[unlikely]] {
         throwInvalidStatusRegisterIndex();
     }
 
-    if (reg == common::StatusRegister::Ip) {
-        pc_ = value;
-        return;
+    const auto reg = static_cast<common::StatusRegister>(index);
+
+    switch (reg) {
+        case common::StatusRegister::Ip:
+            pc_ = value;
+            return;
+
+        case common::StatusRegister::SpSize:
+        case common::StatusRegister::SpTop:
+            statusRegisters_[index] = value;
+            return;
+
+        case common::StatusRegister::Count:
+            break;
     }
 
-    statusRegisters_[index] = value;
+    throwInvalidStatusRegisterIndex();
 }
 
 void Emulator::advanceStackPointer(std::uint8_t destination, std::int64_t delta) {
     validateRegisterIndex(destination, "destination");
 
     // delta уже расширен до int64_t, поэтому -INT32_MIN не вызывает знаковое переполнение
-    const std::uint32_t spTop = readStatusRegister(common::StatusRegister::SpTop);
-    const std::uint32_t spSize = readStatusRegister(common::StatusRegister::SpSize);
+    const std::uint32_t spTop =
+        readStatusRegister(common::statusRegisterIndex(common::StatusRegister::SpTop));
+    const std::uint32_t spSize =
+        readStatusRegister(common::statusRegisterIndex(common::StatusRegister::SpSize));
     if (delta < 0) {
         const std::int64_t allocation = -delta;
         if (allocation > spSize) [[unlikely]] {
@@ -226,8 +245,8 @@ void Emulator::advanceStackPointer(std::uint8_t destination, std::int64_t delta)
         }
     }
 
-    writeStatusRegister(common::StatusRegister::SpTop, newTop);
-    writeStatusRegister(common::StatusRegister::SpSize, newSize);
+    writeStatusRegister(common::statusRegisterIndex(common::StatusRegister::SpTop), newTop);
+    writeStatusRegister(common::statusRegisterIndex(common::StatusRegister::SpSize), newSize);
     writeRegister(destination, newTop);
 }
 
@@ -719,13 +738,13 @@ void Emulator::execute(const DecodedInstruction& instruction) {
         case common::Opcode::SCRW: {
             validateRegisterIndex(instruction.b, "source");
 
-            const auto statusRegister = static_cast<common::StatusRegister>(instruction.a);
+            const auto statusRegisterIndex = instruction.a;
             const std::uint32_t value = readRegister(instruction.b);
-            writeStatusRegister(statusRegister, value);
-            if (statusRegister == common::StatusRegister::SpTop) {
+            writeStatusRegister(statusRegisterIndex, value);
+            if (statusRegisterIndex == common::statusRegisterIndex(common::StatusRegister::SpTop)) {
                 stackBottom_ = value;
             }
-            if (statusRegister == common::StatusRegister::Ip) {
+            if (statusRegisterIndex == common::statusRegisterIndex(common::StatusRegister::Ip)) {
                 return;
             }
             advancePc();
@@ -734,8 +753,8 @@ void Emulator::execute(const DecodedInstruction& instruction) {
         case common::Opcode::SCRR: {
             validateRegisterIndex(instruction.a, "destination");
 
-            const auto statusRegister = static_cast<common::StatusRegister>(instruction.b);
-            writeRegister(instruction.a, readStatusRegister(statusRegister));
+            const auto statusRegisterIndex = instruction.b;
+            writeRegister(instruction.a, readStatusRegister(statusRegisterIndex));
             advancePc();
             return;
         }

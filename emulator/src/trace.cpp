@@ -261,7 +261,7 @@ void Emulator::writeDisasmTrace(
             writeStatusRegisterOperand(
                 out,
                 instruction.b,
-                readStatusRegister(static_cast<common::StatusRegister>(instruction.b))
+                readStatusRegister(instruction.b)
             );
             break;
 

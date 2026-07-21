@@ -67,8 +67,8 @@ private:
     void writeRegister(std::uint8_t reg, std::uint32_t value);
     void writeUninitRamWarning(std::uint32_t address, std::size_t byteCount, std::uint8_t uninitMask) const;
 
-    [[nodiscard]] std::uint32_t readStatusRegister(common::StatusRegister reg) const;
-    void writeStatusRegister(common::StatusRegister reg, std::uint32_t value);
+    [[nodiscard]] std::uint32_t readStatusRegister(std::uint8_t index) const;
+    void writeStatusRegister(std::uint8_t index, std::uint32_t value);
     void advanceStackPointer(std::uint8_t destination, std::int64_t delta);
 
     // вызывается только после проверки !isFinished(); run() выбирает trace-ветку один раз до цикла
