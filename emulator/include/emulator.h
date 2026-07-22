@@ -115,7 +115,7 @@ private:
     Memory memory_;
 
     std::uint64_t pc_ = common::resetAddress;
-    std::uint32_t programBase_ = common::resetAddress;
+    std::uint64_t programBase_ = common::resetAddress;
     std::uint64_t programEnd_ = common::resetAddress;
     std::uint64_t tick_ = 0;
     bool clearStack_ = false;

@@ -18,6 +18,9 @@ namespace emulator {
 
 namespace {
 
+constexpr std::uint64_t maxAddressableSize =
+    static_cast<std::uint64_t>(std::numeric_limits<std::uint32_t>::max()) + 1u;
+
 [[noreturn]] void throwInvalidRegisterOndexIn(const char* fieldName) {
     throw std::runtime_error(std::string("invalid register index in ") + fieldName);
 }
@@ -28,6 +31,10 @@ namespace {
 
 [[noreturn]] void throwInstructionFetchMisaligned() {
     throw std::runtime_error("instruction fetch address is not instruction-aligned");
+}
+
+[[noreturn]] void throwInstructionPointerOutOfRange() {
+    throw std::runtime_error("instruction pointer out of 32-bit address range");
 }
 
 [[noreturn]] void throwUDIVDivByZero() {
@@ -81,8 +88,6 @@ void Emulator::loadProgram(const std::vector<std::uint8_t>& program, std::uint32
         throw std::runtime_error("program base address must be instruction-aligned");
     }
 
-    constexpr std::uint64_t maxAddressableSize =
-        static_cast<std::uint64_t>(std::numeric_limits<std::uint32_t>::max()) + 1u;
     if (program.size() > maxAddressableSize) {
         throw std::runtime_error("program does not fit 32-bit address space");
     }
@@ -104,6 +109,9 @@ void Emulator::loadProgram(const std::vector<std::uint8_t>& program, std::uint32
     programBase_ = baseAddress;
     // конец диапазона может быть 0x1'0000'0000, поэтому хранится шире гостевого адреса
     programEnd_ = base + programSize;
+    if (programEnd_ > memory_.size()) {
+        throw std::runtime_error("program does not fit into memory");
+    }
     pc_ = baseAddress;
     tick_ = 0;
 
@@ -125,13 +133,17 @@ bool Emulator::isFinished() const noexcept {
 }
 
 std::uint32_t Emulator::fetchInstructionWord() const {
-    if (pc_ < programBase_ || pc_ > programEnd_ ||
+    if (pc_ < programBase_ || pc_ >= programEnd_ ||
         programEnd_ - pc_ < common::instructionSizeBytes) [[unlikely]] {
         throwInstructionFetchGoesPastLoadedProgram();
     }
 
     if ((pc_ & (common::instructionSizeBytes - 1)) != 0) [[unlikely]] {
         throwInstructionFetchMisaligned();
+    }
+
+    if (pc_ > common::immediate32Max) [[unlikely]] {
+        throwInstructionPointerOutOfRange();
     }
 
     return memory_.readInstruction32(static_cast<std::uint32_t>(pc_));
@@ -177,6 +189,9 @@ std::uint32_t Emulator::readStatusRegister(std::uint8_t index) const {
 
     switch (reg) {
         case common::StatusRegister::Ip:
+            if (pc_ > common::immediate32Max) [[unlikely]] {
+                throwInstructionPointerOutOfRange();
+            }
             return static_cast<std::uint32_t>(pc_);
 
         case common::StatusRegister::SpTop:
@@ -327,7 +342,21 @@ inline std::uint64_t relativeJumpTarget(std::uint64_t pc, std::uint16_t immediat
     // смещение в командах перехода задается в 4-байтных словах инструкций
     const std::int64_t byteOffset = static_cast<std::int64_t>(signedImmediate16(immediate)) *
                                     static_cast<std::int64_t>(common::instructionSizeBytes);
-    return static_cast<std::uint64_t>(static_cast<std::int64_t>(pc) + byteOffset);
+
+    if (byteOffset < 0) {
+        const auto backward = static_cast<std::uint64_t>(-byteOffset);
+        if (pc < backward) [[unlikely]] {
+            throwInstructionPointerOutOfRange();
+        }
+        return pc - backward;
+    }
+
+    const auto forward = static_cast<std::uint64_t>(byteOffset);
+    if (forward > maxAddressableSize || pc > maxAddressableSize - forward) [[unlikely]] {
+        throwInstructionPointerOutOfRange();
+    }
+
+    return pc + forward;
 }
 
 inline std::uint32_t signExtend(std::uint32_t value, std::uint8_t mode) {
@@ -497,6 +526,9 @@ Emulator::TraceSnapshot Emulator::captureTraceSnapshot(const DecodedInstruction&
 
 void Emulator::execute(const DecodedInstruction& instruction) {
     auto advancePc = [this]() {
+        if (pc_ > maxAddressableSize - common::instructionSizeBytes) [[unlikely]] {
+            throwInstructionPointerOutOfRange();
+        }
         pc_ += common::instructionSizeBytes;
     };
 
@@ -733,6 +765,9 @@ void Emulator::execute(const DecodedInstruction& instruction) {
         case common::Opcode::CALL: {
             validateRegisterIndex(instruction.a, "call target");
             const std::uint32_t target = readRegister(instruction.a);
+            if (pc_ > common::immediate32Max - common::instructionSizeBytes) [[unlikely]] {
+                throwInstructionPointerOutOfRange();
+            }
             writeRegister(
                 common::returnAddressRegister,
                 static_cast<std::uint32_t>(pc_ + common::instructionSizeBytes)
@@ -797,7 +832,7 @@ EMULATOR_ALWAYS_INLINE void Emulator::stepImpl<false>() {
 template <>
 EMULATOR_ALWAYS_INLINE void Emulator::stepImpl<true>() {
 #if MCST_TRACING
-    const std::uint32_t instructionAddress = static_cast<std::uint32_t>(pc_);
+    const std::uint64_t instructionAddress = pc_;
 #endif
     const std::uint32_t word = fetchInstructionWord();
     const DecodedInstruction instruction = decode(word);
@@ -828,7 +863,7 @@ EMULATOR_ALWAYS_INLINE void Emulator::stepImpl<true>() {
     if (emitDisasmTrace) [[unlikely]] {
         writeDisasmTrace(
             currentTick,
-            instructionAddress - programBase_,
+            static_cast<std::uint32_t>(instructionAddress - programBase_),
             word,
             instruction,
             before
